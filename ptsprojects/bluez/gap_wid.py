@@ -18,7 +18,7 @@ import sys
 import time
 
 from pybtp import btp
-from pybtp.types import Prop, Perm, UUID, AdType, bdaddr_reverse
+from pybtp.types import Prop, Perm, UUID, AdType
 import re
 import struct
 from ptsprojects.stack import get_stack
@@ -177,6 +177,8 @@ def hdl_wid_46(desc):
     :param desc: Please send an L2CAP Connection Parameter Update request using valid parameters.
     :return:
     """
+
+    # Wait for connection
     btp.gap_wait_for_connection()
 
     stack = get_stack()
@@ -186,7 +188,6 @@ def hdl_wid_46(desc):
     new_params = copy.deepcopy(stack.gap.conn_params.data)
 
     new_params.conn_latency += 1
-
     btp.gap_conn_param_update(bd_addr, bd_addr_type,
                               new_params.conn_itvl,
                               new_params.conn_itvl,
@@ -200,7 +201,11 @@ def hdl_wid_47(desc):
     stack = get_stack()
 
     btp.gap_set_nonconn()
-    btp.gap_set_nondiscov()
+
+    # Name cannot be used for AD Data in BlueZ because BlueZ alwasy use Name
+    # for SD Data. So, override the AD data here.
+    stack.gap.ad = {}
+    stack.gap.ad[AdType.manufacturer_data] = 'FFFFABCD'
 
     btp.gap_adv_ind_on(ad=stack.gap.ad)
 
@@ -238,15 +243,7 @@ def hdl_wid_51(desc):
 
 
 def hdl_wid_52(desc):
-    btp.gap_adv_off()
-
-    stack = get_stack()
-
-    btp.gap_set_gendiscov()
-    btp.gap_set_conn()
-
-    btp.gap_adv_ind_on(ad=stack.gap.ad)
-
+    hdl_wid_51(desc)
     return True
 
 
@@ -256,13 +253,7 @@ def hdl_wid_53(desc):
 
 
 def hdl_wid_54(desc):
-    stack = get_stack()
-
-    btp.gap_set_nonconn()
-    btp.gap_set_gendiscov()
-
-    btp.gap_adv_ind_on(ad=stack.gap.ad)
-
+    hdl_wid_51(desc)
     return True
 
 
@@ -332,17 +323,6 @@ def hdl_wid_72(desc):
     return True
 
 
-def hdl_wid_73(desc):
-    bd_addr = btp.pts_addr_get()
-    bd_addr_type = btp.pts_addr_type_get()
-
-    btp.gattc_read_uuid(bd_addr_type, bd_addr,
-                        '0001', 'FFFF', UUID.device_name)
-    btp.gattc_read_uuid_rsp()
-
-    return True
-
-
 def hdl_wid_74(desc):
     hdl_wid_72(desc)
     return True
@@ -360,30 +340,24 @@ def hdl_wid_75(desc):
 
 
 def hdl_wid_76(desc):
-    stack = get_stack()
-
-    btp.gap_set_conn()
-    btp.gap_set_limdiscov()
-
-    btp.gap_adv_ind_on(ad=stack.gap.ad)
-
+    hdl_wid_55(desc)
     return True
 
 
 def hdl_wid_77(desc):
+    time.sleep(2)
     btp.gap_disconn()
     return True
 
 
 def hdl_wid_78(desc):
     btp.gap_conn()
+    btp.gap_wait_for_connection()
     return True
 
 
 def hdl_wid_79(desc):
-    stack = get_stack()
-    btp.gap_adv_ind_on(ad=stack.gap.ad)
-    return True
+    return hdl_wid_80(desc)
 
 
 def hdl_wid_80(desc):
@@ -392,6 +366,11 @@ def hdl_wid_80(desc):
     btp.gap_adv_off()
     btp.gap_set_nonconn()
     btp.gap_set_nondiscov()
+
+    # Name cannot be used for AD Data in BlueZ because BlueZ alwasy use Name
+    # for SD Data. So, override the AD data here.
+    stack.gap.ad = {}
+    stack.gap.ad[AdType.manufacturer_data] = 'FFFFABCD'
 
     btp.gap_adv_ind_on(ad=stack.gap.ad)
 
@@ -446,6 +425,7 @@ def hdl_wid_100(desc):
 
 
 def hdl_wid_104(desc):
+    btp.gap_set_bondable_off()
     return True
 
 
@@ -455,6 +435,7 @@ def hdl_wid_106(desc):
 
 
 def hdl_wid_108(desc):
+    btp.gap_wait_for_connection()
     btp.gap_pair()
     return True
 
@@ -463,13 +444,16 @@ def hdl_wid_112(desc):
     bd_addr = btp.pts_addr_get()
     bd_addr_type = btp.pts_addr_type_get()
 
-    handle = btp.parse_handle_description(desc)
-    if not handle:
-        return False
+    btp.gattc_disc_all_chrc(bd_addr_type, bd_addr, 0x0001, 0xffff)
+    attrs = btp.gattc_disc_all_chrc_rsp()
 
-    btp.gattc_read(bd_addr_type, bd_addr, handle)
-    btp.gattc_read_rsp()
-    return True
+    for attr in attrs:
+        if attr.prop & Prop.read:
+            btp.gattc_read(bd_addr_type, bd_addr, attr.value_handle)
+            btp.gattc_read_rsp()
+            return True
+
+    return False
 
 
 def hdl_wid_114(desc):
@@ -646,26 +630,6 @@ def hdl_wid_149(desc):
     return True
 
 
-def hdl_wid_152(desc):
-    stack = get_stack()
-
-    stack.gap.ad[AdType.public_target_addr] = bdaddr_reverse(btp.pts_addr_get())
-
-    btp.gap_adv_ind_on(ad=stack.gap.ad)
-
-    return True
-
-
-def hdl_wid_154(desc):
-    stack = get_stack()
-
-    stack.gap.ad[AdType.advertising_interval] = "0030"
-
-    btp.gap_adv_ind_on(ad=stack.gap.ad)
-
-    return True
-
-
 def hdl_wid_157(desc):
     btp.gap_start_discov(transport='le', type='active', mode='observe')
     sleep(10)  # Give some time to discover devices
@@ -767,22 +731,12 @@ def hdl_wid_204(desc):
     btp.gap_start_discov(type='passive', mode='observe')
     sleep(10)
     btp.gap_stop_discov()
-    return btp.check_discov_results(addr_type=0x02)
-
-
-def hdl_wid_206(desc):
-    stack = get_stack()
-
-    passkey = btp.parse_passkey_description(desc)
-    stack.gap.passkey.data = passkey
-
-    btp.gap_passkey_entry_req_ev()
-    return True
+    return btp.check_discov_results()
 
 
 def hdl_wid_1002(desc):
     stack = get_stack()
-    passkey = stack.gap.get_passkey()
+    passkey = stack.gap.passkey.data
     stack.gap.passkey.data = None
     return passkey
 
@@ -790,4 +744,3 @@ def hdl_wid_1002(desc):
 def hdl_wid_2142(desc):
     btp.gap_conn()
     return True
-

@@ -20,16 +20,13 @@ import socket
 
 from pybtp import defs
 from pybtp.types import BTPError
-from pybtp.iutctl_common import BTPWorker
+from pybtp.iutctl_common import BTPWorker, BTP_ADDRESS
 
 log = logging.debug
 IUT = None
 
 # IUT log file object
 IUT_LOG_FO = None
-
-# BTP communication transport: unix domain socket file name
-BTP_ADDRESS = "/tmp/bt-stack-tester"
 
 
 def get_iut_cmd(btpclient_path):
@@ -53,14 +50,11 @@ class IUTCtl:
         self.btp_socket = None
         self.iut_process = None
 
-        if not AUTO_PTS_LOCAL:
-            self.start()
 
     def start(self):
         """Starts the IUT"""
 
         log("%s.%s", self.__class__, self.start.__name__)
-
         self.btp_socket = BTPWorker()
         self.btp_socket.open()
 
@@ -79,7 +73,7 @@ class IUTCtl:
             log("IUT didn't connect!")
             self.stop()
 
-        self.wait_iut_ready_event()
+#        self.wait_iut_ready_event()
 
     def wait_iut_ready_event(self):
         """Wait until IUT sends ready event after power up"""
@@ -91,6 +85,10 @@ class IUTCtl:
             self.stop()
         else:
             log("IUT ready event received OK")
+
+    def reset(self):
+        """Reset IUT like removing all paired devices"""
+
 
     def stop(self):
         """Powers off the IUT"""

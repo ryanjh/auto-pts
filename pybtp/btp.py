@@ -23,7 +23,7 @@ import socket
 from threading import Timer, Event
 
 import defs
-from types import BTPError, gap_settings_btp2txt, addr2btp_ba, Addr
+from types import BTPError, gap_settings_btp2txt, addr2btp_ba, Addr, OwnAddrType, AdDuration
 from pybtp.types import Perm
 from iutctl_common import set_event_handler
 from random import randint
@@ -72,6 +72,8 @@ CORE = {
     "read_supp_svcs": (defs.BTP_SERVICE_ID_CORE,
                        defs.CORE_READ_SUPPORTED_SERVICES,
                        defs.BTP_INDEX_NONE, ""),
+    "log_message":    (defs.BTP_SERVICE_ID_CORE, defs.CORE_LOG_MESSAGE,
+                       defs.BTP_INDEX_NONE),
 }
 
 GAP = {
@@ -183,6 +185,8 @@ GATTC = {
                   CONTROLLER_INDEX),
     "read_multiple": (defs.BTP_SERVICE_ID_GATT, defs.GATT_READ_MULTIPLE,
                       CONTROLLER_INDEX),
+    "read_multiple_var": (defs.BTP_SERVICE_ID_GATT, defs.GATT_READ_MULTIPLE_VAR,
+                          CONTROLLER_INDEX),
     "write_without_rsp": (defs.BTP_SERVICE_ID_GATT,
                           defs.GATT_WRITE_WITHOUT_RSP, CONTROLLER_INDEX),
     "signed_write": (defs.BTP_SERVICE_ID_GATT,
@@ -210,6 +214,8 @@ L2CAP = {
                   CONTROLLER_INDEX),
     "listen": (defs.BTP_SERVICE_ID_L2CAP, defs.L2CAP_LISTEN,
                CONTROLLER_INDEX),
+    "reconfigure": (defs.BTP_SERVICE_ID_L2CAP, defs.L2CAP_RECONFIGURE,
+                    CONTROLLER_INDEX),
 }
 
 MESH = {
@@ -536,6 +542,22 @@ def core_unreg_svc_rsp_succ():
         logging.debug("response is valid")
 
 
+def core_log_message(message):
+    logging.debug("%s", core_log_message.__name__)
+
+    message_data = bytearray(message)
+    data = struct.pack('H', len(message_data))
+    data.extend(message_data)
+
+    iutctl = get_iut()
+    iutctl.btp_socket.send(*CORE['log_message'], data=data)
+
+    tuple_hdr, tuple_data = iutctl.btp_socket.read()
+    logging.debug("received %r %r", tuple_hdr, tuple_data)
+
+    btp_hdr_check(tuple_hdr, defs.BTP_SERVICE_ID_CORE, defs.CORE_LOG_MESSAGE)
+
+
 def __gap_current_settings_update(settings):
     logging.debug("%s %r", __gap_current_settings_update.__name__, settings)
     if isinstance(settings, tuple):
@@ -567,7 +589,7 @@ def gap_wait_for_disconnection(timeout=30):
     stack.gap.wait_for_disconnection(timeout)
 
 
-def gap_adv_ind_on(ad={}, sd={}):
+def gap_adv_ind_on(ad={}, sd={}, duration=AdDuration.forever, own_addr_type=OwnAddrType.le_identity_address):
     logging.debug("%s %r %r", gap_adv_ind_on.__name__, ad, sd)
 
     stack = get_stack()
@@ -598,6 +620,8 @@ def gap_adv_ind_on(ad={}, sd={}):
     data_ba.extend(chr(len(sd_ba)))
     data_ba.extend(ad_ba)
     data_ba.extend(sd_ba)
+    data_ba.extend(struct.pack("<I", duration))
+    data_ba.extend(chr(own_addr_type))
 
     iutctl.btp_socket.send(*GAP['start_adv'], data=data_ba)
 
@@ -645,7 +669,7 @@ def gap_direct_adv_on(addr, addr_type, high_duty=0):
     __gap_current_settings_update(tuple_data)
 
 
-def gap_conn(bd_addr=None, bd_addr_type=None):
+def gap_conn(bd_addr=None, bd_addr_type=None, own_addr_type=OwnAddrType.le_identity_address):
     logging.debug("%s %r %r", gap_conn.__name__, bd_addr, bd_addr_type)
     iutctl = get_iut()
 
@@ -654,13 +678,14 @@ def gap_conn(bd_addr=None, bd_addr_type=None):
 
     data_ba.extend(chr(pts_addr_type_get(bd_addr_type)))
     data_ba.extend(bd_addr_ba)
+    data_ba.extend(chr(own_addr_type))
 
     iutctl.btp_socket.send(*GAP['conn'], data=data_ba)
 
     gap_command_rsp_succ()
 
 
-def gap_rpa_conn(description):
+def gap_rpa_conn(description, own_addr_type=OwnAddrType.le_identity_address):
     """Initiate connection with PTS using RPA address provided
     in MMI description. Function returns True.
 
@@ -678,6 +703,7 @@ def gap_rpa_conn(description):
 
     data_ba.extend(chr(pts_addr_type_get(bd_addr_type)))
     data_ba.extend(bd_addr_ba)
+    data_ba.extend(chr(own_addr_type))
 
     iutctl.btp_socket.send(*GAP['conn'], data=data_ba)
 
@@ -1928,6 +1954,30 @@ def gattc_read_multiple(bd_addr_type, bd_addr, *hdls):
     iutctl.btp_socket.send(*GATTC['read_multiple'], data=data_ba)
 
 
+def gattc_read_multiple_var(bd_addr_type, bd_addr, *hdls):
+    logging.debug("%s %r %r %r", gattc_read_multiple_var.__name__, bd_addr_type,
+                  bd_addr, hdls)
+    iutctl = get_iut()
+
+    gap_wait_for_connection()
+
+    data_ba = bytearray()
+
+    bd_addr_ba = addr2btp_ba(bd_addr)
+    hdls_j = ''.join(hdl for hdl in hdls)
+    hdls_byte_table = [hdls_j[i:i + 2] for i in range(0, len(hdls_j), 2)]
+    hdls_swp = ''.join([c[1] + c[0] for c in zip(hdls_byte_table[::2],
+                                                 hdls_byte_table[1::2])])
+    hdls_ba = binascii.unhexlify(bytearray(hdls_swp))
+
+    data_ba.extend(chr(bd_addr_type))
+    data_ba.extend(bd_addr_ba)
+    data_ba.extend(chr(len(hdls)))
+    data_ba.extend(hdls_ba)
+
+    iutctl.btp_socket.send(*GATTC['read_multiple_var'], data=data_ba)
+
+
 def gattc_write_without_rsp(bd_addr_type, bd_addr, hdl, val, val_mtp=None):
     logging.debug("%s %r %r %r %r %r", gattc_write_without_rsp.__name__,
                   bd_addr_type, bd_addr, hdl, val, val_mtp)
@@ -2069,7 +2119,7 @@ def gattc_write_reliable(bd_addr_type, bd_addr, hdl, off, val, val_mtp=None):
 
     bd_addr_ba = addr2btp_ba(bd_addr)
     hdl_ba = struct.pack('H', hdl)
-    off_ba = struct.pack('H', off)
+    off_ba = struct.pack('H', int(off))
     val_ba = binascii.unhexlify(bytearray(val))
     val_len_ba = struct.pack('H', len(val_ba))
 
@@ -2613,7 +2663,11 @@ def gattc_read_uuid_rsp(store_rsp=False, store_val=False):
             VERIFY_VALUES.append(att_rsp_str[rsp])
 
         if store_val:
-            VERIFY_VALUES.append((binascii.hexlify(value[0])).upper())
+            n = len(value[0])
+            value = (binascii.hexlify(value[0])).upper()
+            if value != '':
+                chunks = [value[i:i+len(value)/n] for i in range(0, len(value), len(value)/n)]
+                VERIFY_VALUES.extend(chunks)
 
 
 def gattc_read_long_rsp(store_rsp=False, store_val=False):
@@ -2637,6 +2691,30 @@ def gattc_read_long_rsp(store_rsp=False, store_val=False):
 
         if store_val:
             VERIFY_VALUES.append((binascii.hexlify(value[0])).upper())
+
+
+def gattc_read_multiple_rsp(store_val=False, store_rsp=False):
+    iutctl = get_iut()
+
+    tuple_hdr, tuple_data = iutctl.btp_socket.read()
+    logging.debug("%s received %r %r", gattc_read_multiple_rsp.__name__,
+                  tuple_hdr, tuple_data)
+
+    btp_hdr_check(tuple_hdr, defs.BTP_SERVICE_ID_GATT,
+                  defs.GATT_READ_MULTIPLE)
+
+    rsp, values = gatt_dec_read_rsp(tuple_data[0])
+    logging.debug("%s %r %r", gattc_read_multiple_rsp.__name__, rsp, values)
+
+    if store_rsp or store_val:
+        global VERIFY_VALUES
+        VERIFY_VALUES = []
+
+        if store_rsp:
+            VERIFY_VALUES.append(att_rsp_str[rsp])
+
+        if store_val:
+            VERIFY_VALUES.append((binascii.hexlify(values[0])).upper())
 
 
 def gattc_read_multiple_rsp(store_val=False, store_rsp=False):
@@ -2733,7 +2811,7 @@ def l2cap_command_rsp_succ(op=None):
     btp_hdr_check(tuple_hdr, defs.BTP_SERVICE_ID_L2CAP, op)
 
 
-def l2cap_conn(bd_addr, bd_addr_type, psm):
+def l2cap_conn(bd_addr, bd_addr_type, psm, mtu=0, num=1):
     logging.debug("%s %r %r %r", l2cap_conn.__name__, bd_addr, bd_addr_type,
                   psm)
     iutctl = get_iut()
@@ -2749,15 +2827,13 @@ def l2cap_conn(bd_addr, bd_addr_type, psm):
     data_ba = bytearray(chr(bd_addr_type))
     data_ba.extend(bd_addr_ba)
     data_ba.extend(struct.pack('H', psm))
+    data_ba.extend(struct.pack('H', mtu))
+    data_ba.extend(struct.pack('B', num))
 
     iutctl.btp_socket.send(*L2CAP['connect'], data=data_ba)
 
-    chan_id = l2cap_conn_rsp()
-
-    stack = get_stack()
-    stack.l2cap.connect(chan_id, psm, bd_addr_type, bd_addr)
-
-    logging.debug("id %r", chan_id)
+    chan_ids = l2cap_conn_rsp()
+    logging.debug("id %r", chan_ids)
 
 
 l2cap_result_str = {0:  "Success",
@@ -2781,8 +2857,9 @@ def l2cap_conn_rsp():
     logging.debug("received %r %r", tuple_hdr, tuple_data)
 
     btp_hdr_check(tuple_hdr, defs.BTP_SERVICE_ID_L2CAP, defs.L2CAP_CONNECT)
-
-    return struct.unpack_from('<B', tuple_data[0])[0]
+    num = struct.unpack_from('<B', tuple_data[0])[0]
+    channels = struct.unpack_from('%ds' % num, tuple_data[0], 1)[0]
+    return list(channels)
 
 
 def l2cap_disconn(chan_id):
@@ -2819,7 +2896,7 @@ def l2cap_send_data(chan_id, val, val_mtp=None):
     stack.l2cap.tx(chan_id, val)
 
 
-def l2cap_listen(psm, transport):
+def l2cap_listen(psm, transport, mtu=0, response=0):
     logging.debug("%s %r %r", l2cap_le_listen.__name__, psm, transport)
 
     iutctl = get_iut()
@@ -2829,35 +2906,59 @@ def l2cap_listen(psm, transport):
 
     data_ba = bytearray(struct.pack('H', psm))
     data_ba.extend(struct.pack('B', transport))
+    data_ba.extend(struct.pack('H', mtu))
+    data_ba.extend(struct.pack('H', response))
 
     iutctl.btp_socket.send(*L2CAP['listen'], data=data_ba)
 
     l2cap_command_rsp_succ(defs.L2CAP_LISTEN)
 
 
-def l2cap_le_listen(psm):
-    l2cap_listen(psm, defs.L2CAP_TRANSPORT_LE)
+def l2cap_le_listen(psm, mtu=0, response=0):
+    l2cap_listen(psm, defs.L2CAP_TRANSPORT_LE, mtu, response)
+
+
+def l2cap_reconfigure(bd_addr, bd_addr_type, mtu, channels):
+    logging.debug("%s %r %r %r %r", l2cap_reconfigure.__name__,
+                  bd_addr, bd_addr_type, mtu, channels)
+
+    iutctl = get_iut()
+
+    bd_addr = pts_addr_get(bd_addr)
+    bd_addr_type = pts_addr_type_get(bd_addr_type)
+
+    bd_addr_ba = addr2btp_ba(bd_addr)
+    data_ba = bytearray(chr(bd_addr_type))
+    data_ba.extend(bd_addr_ba)
+    data_ba.extend(struct.pack('H', mtu))
+    data_ba.extend(struct.pack('B', len(channels)))
+    for chan in channels:
+        data_ba.extend(struct.pack('B', chan))
+
+    iutctl.btp_socket.send(*L2CAP['reconfigure'], data=data_ba)
+
+    l2cap_command_rsp_succ(defs.L2CAP_RECONFIGURE)
 
 
 def l2cap_connected_ev(l2cap, data, data_len):
     logging.debug("%s %r %r", l2cap_connected_ev.__name__, data, data_len)
 
-    hdr_fmt = '<BHB6s'
-    hdr_len = struct.calcsize(hdr_fmt)
+    hdr_fmt = '<BHHHHHB6s'
+    chan_id, psm, peer_mtu, peer_mps, our_mtu, our_mps, \
+        bd_addr_type, bd_addr = struct.unpack_from(hdr_fmt, data)
+    l2cap.connected(chan_id, psm, peer_mtu, peer_mps, our_mtu, our_mps,
+                    bd_addr_type, bd_addr)
 
-    chan_id, psm, bd_addr_type, bd_addr = struct.unpack_from('<BHB6s', data, 0)
-    l2cap.connected(chan_id, psm, bd_addr_type, bd_addr)
-
-    logging.debug("id:%r on psm:%r, addr %r type %r",
-                  chan_id, psm, bd_addr, bd_addr_type)
+    logging.debug("id:%r on psm:%r, peer_mtu:%r, peer_mps:%r, our_mtu:%r, "
+                  "our_mps:%r, addr %r type %r",
+                  chan_id, psm, peer_mtu, peer_mps, our_mtu, our_mps,
+                  bd_addr, bd_addr_type)
 
 
 def l2cap_disconnected_ev(l2cap, data, data_len):
     logging.debug("%s %r %r", l2cap_disconnected_ev.__name__, data, data_len)
 
     hdr_fmt = '<HBHB6s'
-    hdr_len = struct.calcsize(hdr_fmt)
-
     res, chan_id, psm, bd_addr_type, bd_addr = struct.unpack_from(hdr_fmt, data)
     result_str = l2cap_result_str[res]
     l2cap.disconnected(chan_id, psm, bd_addr_type, bd_addr, result_str)
@@ -2873,16 +2974,28 @@ def l2cap_data_rcv_ev(l2cap, data, data_len):
     hdr_len = struct.calcsize(hdr_fmt)
 
     chan_id, data_len = struct.unpack_from(hdr_fmt, data)
-    data_rx = binascii.hexlify(struct.unpack_from('%ds' % data_len, data, hdr_len)[0])
+    data_rx = struct.unpack_from('%ds' % data_len, data, hdr_len)[0]
     l2cap.rx(chan_id, data_rx)
 
-    logging.debug("id:%r, data:%s", chan_id, data_rx)
+    logging.debug("id:%r, data:%s", chan_id, binascii.hexlify(data_rx))
+
+
+def l2cap_reconfigured_ev(l2cap, data, data_len):
+    logging.debug("%s %r %r", l2cap_reconfigured_ev.__name__, data, data_len)
+
+    hdr_fmt = '<BHHHH'
+    chan_id, peer_mtu, peer_mps, our_mtu, our_mps = \
+        struct.unpack_from(hdr_fmt, data)
+    l2cap.reconfigured(chan_id, peer_mtu, peer_mps, our_mtu, our_mps)
+    logging.debug("id:%r, peer_mtu:%r, peer_mps:%r our_mtu:%r our_mps:%r",
+                  chan_id, peer_mtu, peer_mps, our_mtu, our_mps)
 
 
 L2CAP_EV = {
     defs.L2CAP_EV_CONNECTED: l2cap_connected_ev,
     defs.L2CAP_EV_DISCONNECTED: l2cap_disconnected_ev,
     defs.L2CAP_EV_DATA_RECEIVED: l2cap_data_rcv_ev,
+    defs.L2CAP_EV_RECONFIGURED: l2cap_reconfigured_ev,
 }
 
 

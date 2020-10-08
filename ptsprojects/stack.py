@@ -14,6 +14,7 @@
 #
 
 import logging
+import time
 from threading import Lock, Timer, Event
 from pybtp.types import AdType
 from binascii import hexlify
@@ -215,7 +216,11 @@ class Gap:
             return False
 
     def iut_addr_get_str(self):
-        return str(self.iut_bd_addr.data["address"])
+        addr = self.iut_bd_addr.data["address"]
+        if addr:
+            return str(addr)
+        else:
+            return ""
 
     def iut_addr_set(self, addr, addr_type):
         self.iut_bd_addr.data["address"] = addr
@@ -328,9 +333,14 @@ class Mesh:
 
 
 class L2capChan:
-    def __init__(self, chan_id, psm, bd_addr_type, bd_addr):
+    def __init__(self, chan_id, psm, peer_mtu, peer_mps, our_mtu, our_mps,
+                 bd_addr_type, bd_addr):
         self.id = chan_id
         self.psm = psm
+        self.peer_mtu = peer_mtu
+        self.peer_mps = peer_mps
+        self.our_mtu = our_mtu
+        self.our_mps = our_mps
         self.peer_bd_addr_type = bd_addr_type
         self.peer_bd_addr = bd_addr
         self.disconn_reason = None
@@ -363,8 +373,13 @@ class L2capChan:
             return True
         return False
 
-    def connected(self, psm, bd_addr_type, bd_addr):
+    def connected(self, psm, peer_mtu, peer_mps, our_mtu, our_mps,
+                  bd_addr_type, bd_addr):
         self.psm = psm
+        self.peer_mtu = peer_mtu
+        self.peer_mps = peer_mps
+        self.our_mtu = our_mtu
+        self.our_mps = our_mps
         self.peer_bd_addr_type = bd_addr_type
         self.peer_bd_addr = bd_addr
         self.state = "connected"
@@ -384,7 +399,7 @@ class L2capChan:
 
     def rx_data_get(self, timeout):
         if len(self.data_rx) != 0:
-            return "".join(self.data_rx).upper()
+            return self.data_rx
 
         flag = Event()
         flag.set()
@@ -395,18 +410,31 @@ class L2capChan:
         while flag.is_set():
             if len(self.data_rx) != 0:
                 t.cancel()
-                return "".join(self.data_rx).upper()
+                return self.data_rx
 
         return None
 
     def tx_data_get(self):
-        return "".join(self.data_tx)
+        return self.data_tx
 
 
 class L2cap:
-    def __init__(self, psm):
+    connection_success = 0x0000
+    unknown_le_psm = 0x0002
+    no_resources = 0x0004
+    insufficient_authen = 0x0005
+    insufficient_author = 0x0006
+    insufficient_key_sz = 0x0007
+    insufficient_enc = 0x0008
+    invalid_source_cid = 0x0009
+    source_cid_already_used = 0x000a
+    unacceptable_parameters = 0x000b
+    invalid_parameters = 0x000c
+
+    def __init__(self, psm, initial_mtu):
         # PSM used for testing for Client role
         self.psm = psm
+        self.initial_mtu = initial_mtu
         self.channels = []
 
     def _chan_lookup_id(self, chan_id):
@@ -415,19 +443,31 @@ class L2cap:
                 return chan
         return None
 
+    def clear_data(self):
+        for chan in self.channels:
+            chan.data_tx = []
+            chan.data_rx = []
+
+    def reconfigured(self, chan_id, peer_mtu, peer_mps, our_mtu, our_mps):
+        channel = self._chan_lookup_id(chan_id)
+        channel.peer_mtu = peer_mtu
+        channel.peer_mps = peer_mps
+        channel.our_mtu = our_mtu
+        channel.our_mps = our_mps
+
     def psm_set(self, psm):
         self.psm = psm
 
-    def connect(self, chan_id, psm, bd_addr_type, bd_addr):
-        self.channels.append(L2capChan(chan_id, psm, bd_addr_type, bd_addr))
-
-    def connected(self, chan_id, psm, bd_addr_type, bd_addr):
+    def connected(self, chan_id, psm, peer_mtu, peer_mps, our_mtu, our_mps,
+                  bd_addr_type, bd_addr):
         chan = self._chan_lookup_id(chan_id)
         if chan is None:
-            chan = L2capChan(chan_id, psm, bd_addr_type, bd_addr)
+            chan = L2capChan(chan_id, psm, peer_mtu, peer_mps, our_mtu, our_mps,
+                             bd_addr_type, bd_addr)
             self.channels.append(chan)
 
-        chan.connected(psm, bd_addr_type, bd_addr)
+        chan.connected(psm, peer_mtu, peer_mps, our_mtu, our_mps,
+                       bd_addr_type, bd_addr)
 
     def disconnected(self, chan_id, psm, bd_addr_type, bd_addr, reason):
         chan = self._chan_lookup_id(chan_id)
@@ -486,86 +526,101 @@ class L2cap:
         return data
 
 
-class Synch:
-    def __init__(self, set_pending_response_func,
-                 clear_pending_responses_func):
-        self._synch_table = []
-        self._pending_responses = {}
-        self._set_pending_response_func = set_pending_response_func
-        self._clear_pending_responses_func = clear_pending_responses_func
+class SynchPoint:
+    def __init__(self, test_case, wid, delay=None):
+        self.test_case = test_case
+        self.wid = wid
+        self.delay = delay
+        self.description = None
 
-    def add_synch_element(self, elem):
-        wid_dict = {}
+    def is_waiting(self):
+        return self.description is not None
 
-        """Initialize element with empty description array, tester don't know
-        which wid happens earlier"""
-        for e in elem:
-            tc_name = e[0]
-            wid = e[1]
+    def set_waiting(self, description):
+        self.description = description
 
-            wid_dict[tc_name] = [wid, None]
+    def clear_waiting(self):
+        self.description = None
 
-        self._synch_table.append(wid_dict)
 
-    def perform_synch(self, wid, tc_name, description):
-        action_wids = []
+class SynchElem:
+    def __init__(self, sync_points):
+        self.sync_points = sync_points
 
-        for elem in self._synch_table:
-            # i[value][description]
-            descs = [i[1][1] for i in elem.iteritems()]
-
-            e_wid = elem[tc_name][0]
-            if tc_name in elem and e_wid == wid:
-                # Not all pending wids are already waiting = schedule also me
-                if descs.count(None) > (len(descs) - 1):
-                    elem[tc_name][1] = description
-                    continue
-
-                # Pack all pending actions to be performed right out of synch
-                for inst in elem:
-                    if inst == tc_name:
-                        continue
-
-                    i_wid = elem[inst][0]
-                    i_desc = elem[inst][1]
-                    action_wids.append((i_wid, i_desc, inst,
-                                        self._set_pending_response_func))
-
-                self._synch_table.remove(elem)
-
-                # Clean the remaining element descriptions with the same e_wid
-                for e in self._synch_table:
-                    for tc_name, i in e.iteritems():
-                        if i[0] == e_wid or i[0] == i_wid:
-                            i[1] = None
-
-                return action_wids
+    def find_matching(self, test_case, wid):
+        matching_items = [item for item in self.sync_points if
+                            item.test_case == test_case and item.wid == wid]
+        if matching_items:
+            return matching_items[0]
 
         return None
 
+    def is_ready(self):
+       return all([item.is_waiting() for item in self.sync_points])
+
+    def clear(self, clear_element):
+        for clear_item in clear_element.sync_points:
+            match = self.find_matching(clear_item.test_case,
+                                       clear_item.wid)
+            if match:
+                match.clear_waiting()
+
+
+class Synch:
+    def __init__(self, sync_callbacks):
+        self._synch_table = []
+        self._pending_responses = []
+        self._sync_callbacks = sync_callbacks
+
+    def add_synch_element(self, elem):
+        self._synch_table.append(SynchElem(elem))
+
+    def perform_synch(self, wid, tc_name, description):
+        found_element = None
+
+        for i, elem in enumerate(self._synch_table):
+            tc_item = elem.find_matching(tc_name, wid)
+            if not tc_item:
+                continue
+
+            tc_item.set_waiting(description)
+            if not elem.is_ready():
+                # Wait for other wids
+                return None
+
+            found_element = i
+            break
+
+        synch_element = self._synch_table.pop(found_element)
+
+        # Clean the remaining element descriptions with the same e_wid
+        for element in self._synch_table:
+            element.clear(synch_element)
+
+        return synch_element.sync_points
+
     def is_required_synch(self, tc_name, wid):
         for elem in self._synch_table:
-            if tc_name in elem:
-                e_wid = elem[tc_name][0]
-
-                if e_wid == wid:
-                    return True
-
+            if elem.find_matching(tc_name, wid):
+                return True
         return False
 
-    def prepare_pending_response(self, test_case_name, response):
-        self._pending_responses[test_case_name] = response
+    def prepare_pending_response(self, test_case_name, response, delay):
+        self._pending_responses.append((test_case_name, response, delay))
 
     def set_pending_responses_if_any(self):
-        for rsp in self._pending_responses.iteritems():
-            self._set_pending_response_func(rsp)
+        for name, rsp, delay in self._pending_responses:
+            for cb in self._sync_callbacks:
+                if cb.get_current_test_case() == name:
+                    cb.set_pending_response((name, rsp, delay))
 
-        self._pending_responses = {}
+        self._pending_responses = []
 
     def cancel_synch(self):
         self._synch_table = []
-        self._pending_responses = {}
-        self._clear_pending_responses_func()
+        self._pending_responses = []
+        for cb in self._sync_callbacks:
+            cb.clear_pending_responses()
 
 
 class Gatt:
@@ -635,16 +690,14 @@ class Stack:
         self.mesh = Mesh(uuid, oob, output_size, output_actions, input_size,
                          input_actions, crpl_size)
 
-    def l2cap_init(self, psm):
-        self.l2cap = L2cap(psm)
+    def l2cap_init(self, psm, initial_mtu):
+        self.l2cap = L2cap(psm, initial_mtu)
 
     def gatt_init(self):
         self.gatt = Gatt()
 
-    def synch_init(self, set_pending_response_func,
-                   clear_pending_responses_func):
-        self.synch = Synch(set_pending_response_func,
-                           clear_pending_responses_func)
+    def synch_init(self, sync_callbacks):
+        self.synch = Synch(sync_callbacks)
 
     def cleanup(self):
         if self.gap:

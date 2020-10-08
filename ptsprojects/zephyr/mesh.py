@@ -34,6 +34,7 @@ except ImportError:  # running this module as script
 from pybtp import defs, btp
 from pybtp.types import MeshVals
 from ptsprojects.stack import get_stack
+from ptsprojects.stack import SynchPoint
 from wid import mesh_wid_hdl
 from uuid import uuid4
 from binascii import hexlify
@@ -54,11 +55,7 @@ def set_pixits(ptses):
 
     pts -- Instance of PyPTS"""
 
-    if len(ptses) < 2:
-        return
-
     pts = ptses[0]
-    pts2 = ptses[1]
 
     pts.set_pixit("MESH", "TSPX_bd_addr_iut", "DEADBEEFDEAD")
     pts.set_pixit("MESH", "TSPX_bd_addr_additional_whitelist", "")
@@ -97,6 +94,13 @@ def set_pixits(ptses):
                   "3216D1509884B533248541792B877F98")
     pts.set_pixit("MESH", "TSPX_device_key",
                   "00000000000000000000000000000000")
+    pts.set_pixit("MESH", "TSPX_enable_IUT_provisioner", "FALSE")
+    pts.set_pixit("MESH", "TSPX_maximum_number_of_supported_subnets", "1")
+
+    if len(ptses) < 2:
+        return
+
+    pts2 = ptses[1]
 
     # PTS2
     pts2.set_pixit("MESH", "TSPX_bd_addr_iut", "DEADBEEFDEAD")
@@ -136,17 +140,15 @@ def set_pixits(ptses):
                    "3216D1509884B533248541792B877F98")
     pts2.set_pixit("MESH", "TSPX_device_key",
                    "00000000000000000000000000000000")
+    pts2.set_pixit("MESH", "TSPX_enable_IUT_provisioner", "FALSE")
+    pts2.set_pixit("MESH", "TSPX_maximum_number_of_supported_subnets", "1")
 
 
 def test_cases(ptses):
     """Returns a list of MESH test cases
     pts -- Instance of PyPTS"""
 
-    if len(ptses) < 2:
-        return []
-
     pts = ptses[0]
-    pts2 = ptses[1]
 
     stack = get_stack()
     pts_bd_addr = pts.q_bd_addr
@@ -177,11 +179,15 @@ def test_cases(ptses):
             "MESH", "TSPX_bd_addr_iut",
             stack.gap.iut_addr_get_str())),
         TestFunc(lambda: pts.update_pixit_param(
+            "MESH", "TSPX_maximum_network_message_cache_entries", "10")),
+        TestFunc(lambda: pts.update_pixit_param(
+            "MESH", "TSPX_maximum_number_of_supported_subnets", "2")),
+        TestFunc(lambda: pts.update_pixit_param(
             "MESH", "TSPX_subscription_address_list",
             MeshVals.subscription_addr_list1))]
 
     pre_conditions_slave = [
-        TestFunc(lambda: pts.update_pixit_param(
+        TestFunc(lambda: pts2.update_pixit_param(
             "MESH", "TSPX_bd_addr_iut", stack.gap.iut_addr_get_str()))]
 
     test_cases = [
@@ -235,9 +241,6 @@ def test_cases(ptses):
                   generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/CFG/HBP/BV-04-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl),
-        ZTestCase("MESH", "MESH/NODE/CFG/HBP/BV-05-C",
-                  cmds=pre_conditions,
-                  generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/CFG/HBP/BV-06-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/CFG/HBP/BV-07-C", cmds=pre_conditions,
@@ -252,21 +255,6 @@ def test_cases(ptses):
                   generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/CFG/HBS/BV-04-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl),
-        ZTestCase("MESH", "MESH/NODE/CFG/HBS/BV-05-C",
-                  cmds=pre_conditions +
-                       [TestFunc(lambda: pts.update_pixit_param(
-                            "MESH", "TSPX_device_uuid", device_uuid2)),
-                        TestFunc(lambda: pts.update_pixit_param(
-                            "MESH", "TSPX_device_uuid2", device_uuid))],
-                  generic_wid_hdl=mesh_wid_hdl,
-                  lt2="MESH/NODE/CFG/HBS/BV-05-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/CFG/HBS/BV-05-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/CFG/MAKL/BI-01-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/CFG/MAKL/BI-02-C", cmds=pre_conditions,
@@ -385,7 +373,8 @@ def test_cases(ptses):
                   generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/IVU/BV-02-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl),
-        ZTestCase("MESH", "MESH/NODE/IVU/BV-03-C", cmds=pre_conditions,
+        ZTestCase("MESH", "MESH/NODE/IVU/BV-03-C", cmds=pre_conditions +
+                  [TestFunc(btp.mesh_iv_test_mode_autoinit)],
                   generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/IVU/BV-04-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl),
@@ -490,6 +479,8 @@ def test_cases(ptses):
                   generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/PROV/BI-13-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl),
+        ZTestCase("MESH", "MESH/NODE/PROV/BI-15-C", cmds=pre_conditions,
+                  generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/PROV/BV-01-C",
                   cmds=pre_conditions +
                   [TestFunc(stack.mesh_init, device_uuid, oob,
@@ -579,21 +570,60 @@ def test_cases(ptses):
                   generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/SR/MPXS/BV-07-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl),
-        ZTestCase("MESH", "MESH/SR/MPXS/BV-08-C", cmds=pre_conditions +
-                  [TestFunc(lambda: pts.update_pixit_param(
-                            "MESH", "TSPX_device_uuid", device_uuid2)),
-                   TestFunc(lambda: pts.update_pixit_param(
-                            "MESH", "TSPX_device_uuid2", device_uuid))],
-                  generic_wid_hdl=mesh_wid_hdl,
-                  lt2="MESH/SR/MPXS/BV-08-C-LT2"),
         ZTestCase("MESH", "MESH/SR/MPXS/BV-09-C", cmds=pre_conditions +
                   [TestFunc(lambda: get_stack().mesh.proxy_identity_enable())],
                   generic_wid_hdl=mesh_wid_hdl),
+        ZTestCase("MESH", "MESH/SR/PROX/BV-01-C", cmds=pre_conditions,
+                  generic_wid_hdl=mesh_wid_hdl),
+        ZTestCase("MESH", "MESH/SR/PROX/BV-07-C", cmds=pre_conditions,
+                  generic_wid_hdl=mesh_wid_hdl),
+        ZTestCase("MESH", "MESH/SR/PROX/BV-11-C", cmds=pre_conditions,
+                  generic_wid_hdl=mesh_wid_hdl),
+        ZTestCase("MESH", "MESH/SR/PROX/BV-15-C", cmds=pre_conditions,
+                  generic_wid_hdl=mesh_wid_hdl),
+    ]
+
+    if len(ptses) < 2:
+        return test_cases
+
+    pts2 = ptses[1]
+
+    test_cases_lt2 = [
+        ZTestCase("MESH", "MESH/NODE/CFG/HBP/BV-05-C",
+                  cmds=pre_conditions +
+                       [TestFunc(lambda: pts.update_pixit_param(
+                           "MESH", "TSPX_device_uuid", device_uuid2)),
+                        TestFunc(lambda: pts.update_pixit_param(
+                            "MESH", "TSPX_device_uuid2", device_uuid)),
+                        TestFunc(lambda: btp.mesh_lpn(True)),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/CFG/HBP/BV-05-C", 332),
+                                  SynchPoint("MESH/NODE/CFG/HBP/BV-05-C-LT2", 563, delay=5)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/CFG/HBP/BV-05-C", 333),
+                                  SynchPoint("MESH/NODE/CFG/HBP/BV-05-C-LT2", 560, delay=5)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/CFG/HBP/BV-05-C", 303),
+                                  SynchPoint("MESH/NODE/CFG/HBP/BV-05-C-LT2", 561, delay=20)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/CFG/HBP/BV-05-C", 332),
+                                  SynchPoint("MESH/NODE/CFG/HBP/BV-05-C-LT2", 564, delay=5)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/CFG/HBP/BV-05-C", 333),
+                                  SynchPoint("MESH/NODE/CFG/HBP/BV-05-C-LT2", 562, delay=5)])],
+                  generic_wid_hdl=mesh_wid_hdl,
+                  lt2="MESH/NODE/CFG/HBP/BV-05-C-LT2"),
+        ZTestCase("MESH", "MESH/NODE/CFG/HBS/BV-05-C",
+                  cmds=pre_conditions +
+                       [TestFunc(lambda: pts.update_pixit_param(
+                           "MESH", "TSPX_device_uuid", device_uuid2)),
+                        TestFunc(lambda: pts.update_pixit_param(
+                            "MESH", "TSPX_device_uuid2", device_uuid))],
+                  generic_wid_hdl=mesh_wid_hdl,
+                  lt2="MESH/NODE/CFG/HBS/BV-05-C-LT2"),
         ZTestCase("MESH", "MESH/SR/PROX/BI-01-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/SR/PROX/BI-01-C-LT2"),
-        ZTestCase("MESH", "MESH/SR/PROX/BV-01-C", cmds=pre_conditions,
-                  generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/SR/PROX/BV-02-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/SR/PROX/BV-02-C-LT2"),
@@ -609,8 +639,6 @@ def test_cases(ptses):
         ZTestCase("MESH", "MESH/SR/PROX/BV-06-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/SR/PROX/BV-06-C-LT2"),
-        ZTestCase("MESH", "MESH/SR/PROX/BV-07-C", cmds=pre_conditions,
-                  generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/SR/PROX/BV-08-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/SR/PROX/BV-08-C-LT2"),
@@ -620,14 +648,21 @@ def test_cases(ptses):
         ZTestCase("MESH", "MESH/SR/PROX/BV-10-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/SR/PROX/BV-10-C-LT2"),
-        ZTestCase("MESH", "MESH/SR/PROX/BV-11-C", cmds=pre_conditions,
-                  generic_wid_hdl=mesh_wid_hdl),
-        ZTestCase("MESH", "MESH/SR/PROX/BV-12-C", cmds=pre_conditions,
+        ZTestCase("MESH", "MESH/SR/PROX/BV-12-C", cmds=pre_conditions +
+                  [TestFunc(btp.mesh_iv_test_mode_autoinit)],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/SR/PROX/BV-12-C-LT2"),
         ZTestCase("MESH", "MESH/SR/PROX/BV-13-C", cmds=pre_conditions,
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/SR/PROX/BV-13-C-LT2"),
+        ZTestCase("MESH", "MESH/SR/MPXS/BV-08-C",
+                  cmds=pre_conditions +
+                       [TestFunc(lambda: pts.update_pixit_param(
+                           "MESH", "TSPX_device_uuid", device_uuid2)),
+                        TestFunc(lambda: pts.update_pixit_param(
+                            "MESH", "TSPX_device_uuid2", device_uuid))],
+                  generic_wid_hdl=mesh_wid_hdl,
+                  lt2="MESH/SR/MPXS/BV-08-C-LT2"),
         ZTestCase("MESH", "MESH/SR/PROX/BV-14-C", cmds=pre_conditions +
                   [TestFunc(btp.mesh_iv_test_mode_autoinit)],
                   generic_wid_hdl=mesh_wid_hdl,
@@ -639,8 +674,8 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BI-01-C", 6),
-                                  ("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BI-01-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/TWO_NODES_PROVISIONER"),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BI-02-C",
@@ -650,8 +685,8 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BI-02-C", 6),
-                                  ("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BI-02-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/TWO_NODES_PROVISIONER"),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BI-03-C",
@@ -661,8 +696,8 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BI-03-C", 6),
-                                  ("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BI-03-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/TWO_NODES_PROVISIONER"),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-01-C",
@@ -672,8 +707,8 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                                  "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-01-C", 6),
-                                  ("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13))),],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-01-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/TWO_NODES_PROVISIONER"),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-02-C",
@@ -683,27 +718,24 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-02-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-02-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-02-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-02-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-02-C", 302),
-                                  ("MESH/NODE/FRND/FN/BV-02-C-LT2", 319))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-02-C-LT2", 342, delay=10)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-02-C", 302),
-                                  ("MESH/NODE/FRND/FN/BV-02-C-LT2", 319))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-02-C-LT2", 319, delay=15),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-02-C", 302)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-02-C", 302),
-                                  ("MESH/NODE/FRND/FN/BV-02-C-LT2", 319)))
-                        ],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-02-C-LT2", 319, delay=15),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-02-C", 302)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-02-C-LT2", 319, delay=15),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-02-C", 302)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-02-C-LT2", 319, delay=15),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-02-C", 302)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-02-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-02-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-03-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -711,17 +743,13 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-03-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-03-C-LT2", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-03-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-03-C-LT2", 13)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-03-C-LT2", 319),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-03-C", 302, delay=5)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-03-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-03-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-04-C",
                   cmds=pre_conditions +
                        [TestFunc(btp.mesh_iv_test_mode_autoinit),
@@ -730,20 +758,16 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-04-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-04-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-04-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-04-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-04-C", 305),
-                                  ("MESH/NODE/FRND/FN/BV-04-C-LT2", 311)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-04-C-LT2", 311),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-04-C", 305, delay=5)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-04-C-LT2", 255),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-04-C", 305, delay=5)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-04-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-04-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-05-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -751,21 +775,16 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-05-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-05-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-05-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-05-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-05-C", 302),
-                                  ("MESH/NODE/FRND/FN/BV-05-C-LT2", 344)))
-                        ],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-05-C-LT2", 342),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-05-C", 302, delay=2)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-05-C-LT2", 344),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-05-C", 302, delay=2)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-05-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-05-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-06-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -773,17 +792,10 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-06-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-06-C-LT2", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-06-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-06-C-LT2", 13)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-06-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-06-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-07-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -791,8 +803,8 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-07-C", 6),
-                                  ("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-07-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/TWO_NODES_PROVISIONER"),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-08-C",
@@ -802,20 +814,16 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-08-C", 337),
-                                  ("MESH/NODE/FRND/FN/BV-08-C-LT2", 15))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-08-C-LT2", 15),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-08-C", 337, 1)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-08-C", 302),
-                                  ("MESH/NODE/FRND/FN/BV-08-C-LT2", 306)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-08-C-LT2", 319, delay=1),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-08-C", 302, 30)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-08-C-LT2", 319, delay=2),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-08-C", 302, 30)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-08-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-08-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-09-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -823,20 +831,13 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-09-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-09-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-09-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-09-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-09-C", 310),
-                                  ("MESH/NODE/FRND/FN/BV-09-C-LT2", 319)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-09-C", 310),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-09-C-LT2", 319)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-09-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-09-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-10-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -844,21 +845,13 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-10-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-10-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-10-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-10-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-10-C", 341),
-                                  ("MESH/NODE/FRND/FN/BV-10-C-LT2", 319)))
-                        ],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-10-C-LT2", 319),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-10-C", 341, delay=5)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-10-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-10-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-11-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -866,20 +859,13 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-11-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-11-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-11-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-11-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-11-C-LT2", 324),
-                                  ("MESH/NODE/FRND/FN/BV-11-C", 337)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-11-C-LT2", 324),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-11-C", 337)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-11-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-11-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-12-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -887,20 +873,13 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-12-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-12-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-12-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-12-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-12-C", 335),
-                                  ("MESH/NODE/FRND/FN/BV-12-C-LT2", 330)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-12-C-LT2", 330),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-12-C", 335, delay=10)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-12-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-12-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-13-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -908,8 +887,8 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-13-C", 6),
-                                  ("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-13-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/TWO_NODES_PROVISIONER", 13)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/TWO_NODES_PROVISIONER"),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-14-C",
@@ -919,26 +898,19 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-14-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-14-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-14-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-14-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-14-C", 339),
-                                  ("MESH/NODE/FRND/FN/BV-14-C-LT2", 267))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-14-C", 339),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-14-C-LT2", 283)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-14-C", 339),
-                                  ("MESH/NODE/FRND/FN/BV-14-C-LT2", 282))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-14-C", 339),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-14-C-LT2", 282)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-14-C", 339),
-                                  ("MESH/NODE/FRND/FN/BV-14-C-LT2", 339)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-14-C", 339),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-14-C-LT2", 339)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-14-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-14-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-15-C",
                   cmds=pre_conditions +
                        [TestFunc(btp.mesh_iv_test_mode_autoinit),
@@ -947,26 +919,19 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-15-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-15-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-15-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-15-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-15-C", 339),
-                                  ("MESH/NODE/FRND/FN/BV-15-C-LT2", 267))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-15-C", 339),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-15-C-LT2", 283)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-15-C", 339),
-                                  ("MESH/NODE/FRND/FN/BV-15-C-LT2", 282))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-15-C", 339),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-15-C-LT2", 282)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-15-C", 339),
-                                  ("MESH/NODE/FRND/FN/BV-15-C-LT2", 339)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-15-C", 339),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-15-C-LT2", 339)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-15-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-15-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-16-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -974,17 +939,16 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-16-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-16-C-LT2", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-16-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-16-C-LT2", 13)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-16-C-LT2", 319),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-16-C", 302, delay=5)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-16-C-LT2", 319),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-16-C", 302, delay=5)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-16-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-16-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-17-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -993,23 +957,16 @@ def test_cases(ptses):
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(sleep, 10, start_wid=318),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-17-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-17-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-17-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-17-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-17-C", 302),
-                                  ("MESH/NODE/FRND/FN/BV-17-C-LT2", 319))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-17-C-LT2", 319),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-17-C", 302, delay=5)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-17-C", 302),
-                                  ("MESH/NODE/FRND/FN/BV-17-C-LT2", 318)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-17-C-LT2", 318),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-17-C", 302, delay=5)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-17-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-17-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-18-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -1017,20 +974,13 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-18-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-18-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-18-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-18-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-18-C", 302),
-                                  ("MESH/NODE/FRND/FN/BV-18-C-LT2", 317)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-18-C-LT2", 317),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-18-C", 302, delay=2)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-18-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-18-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-19-C",
                   cmds=pre_conditions +
                        [TestFunc(lambda: pts.update_pixit_param(
@@ -1038,20 +988,16 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-19-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-19-C-LT2", 13))),
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-19-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-19-C-LT2", 13)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-19-C", 302),
-                                  ("MESH/NODE/FRND/FN/BV-19-C-LT2", 318)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-19-C", 302),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-19-C-LT2", 318, delay=10)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-19-C", 302),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-19-C-LT2", 318, delay=10)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-19-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-19-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-20-C",
                   cmds=pre_conditions +
                        [TestFunc(btp.mesh_iv_test_mode_autoinit),
@@ -1060,17 +1006,16 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-20-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-20-C-LT2", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-20-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-20-C-LT2", 13)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-20-C-LT2", 267),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-20-C", 348, delay=5)]),
+                        TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-20-C-LT2", 311),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-20-C", 345, delay=5)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-20-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-20-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
         ZTestCase("MESH", "MESH/NODE/FRND/FN/BV-21-C",
                   cmds=pre_conditions +
                        [TestFunc(btp.mesh_iv_test_mode_autoinit),
@@ -1079,17 +1024,13 @@ def test_cases(ptses):
                         TestFunc(lambda: pts.update_pixit_param(
                             "MESH", "TSPX_device_uuid2", device_uuid)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/NODE/FRND/FN/BV-21-C", 6),
-                                  ("MESH/NODE/FRND/FN/BV-21-C-LT2", 13)))],
+                                 [SynchPoint("MESH/NODE/FRND/FN/BV-21-C", 6),
+                                  SynchPoint("MESH/NODE/FRND/FN/BV-21-C-LT2", 13)])],
                   generic_wid_hdl=mesh_wid_hdl,
                   lt2="MESH/NODE/FRND/FN/BV-21-C-LT2"),
-        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-21-C-LT2",
-                       cmds=pre_conditions_slave +
-                            [TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid", device_uuid)),
-                             TestFunc(lambda: pts2.update_pixit_param(
-                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
-                       generic_wid_hdl=mesh_wid_hdl),
+    ]
+
+    test_cases_slaves = [
         ZTestCaseSlave("MESH", "MESH/SR/MPXS/BV-08-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(lambda: pts2.update_pixit_param(
@@ -1097,80 +1038,223 @@ def test_cases(ptses):
                         TestFunc(lambda: pts2.update_pixit_param(
                                  "MESH", "TSPX_device_uuid2", device_uuid2)),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/MPXS/BV-08-C", 12),
-                                  ("MESH/SR/MPXS/BV-08-C-LT2", 13)))],
+                                 [SynchPoint("MESH/SR/MPXS/BV-08-C", 12),
+                                  SynchPoint("MESH/SR/MPXS/BV-08-C-LT2", 13)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-02-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-02-C", 361),
-                                  ("MESH/SR/PROX/BV-02-C-LT2", 17)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-02-C", 361),
+                                  SynchPoint("MESH/SR/PROX/BV-02-C-LT2", 17)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-03-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-03-C", 361),
-                                  ("MESH/SR/PROX/BV-03-C-LT2", 17)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-03-C", 361),
+                                  SynchPoint("MESH/SR/PROX/BV-03-C-LT2", 17)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-04-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-04-C", 367),
-                                  ("MESH/SR/PROX/BV-04-C-LT2", 362)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-04-C", 367),
+                                  SynchPoint("MESH/SR/PROX/BV-04-C-LT2", 362)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-05-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-05-C", 367),
-                                  ("MESH/SR/PROX/BV-05-C-LT2", 362)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-05-C", 367),
+                                  SynchPoint("MESH/SR/PROX/BV-05-C-LT2", 362)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-06-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-06-C", 361),
-                                  ("MESH/SR/PROX/BV-06-C-LT2", 17)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-06-C", 361),
+                                  SynchPoint("MESH/SR/PROX/BV-06-C-LT2", 17)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-08-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-08-C-LT2", 17),
-                                  ("MESH/SR/PROX/BV-08-C", 353))),
+                                 [SynchPoint("MESH/SR/PROX/BV-08-C", 353),
+                                  SynchPoint("MESH/SR/PROX/BV-08-C-LT2", 17)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-08-C-LT2", 17),
-                                  ("MESH/SR/PROX/BV-08-C", 354)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-08-C", 354),
+                                  SynchPoint("MESH/SR/PROX/BV-08-C-LT2", 17)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-09-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-09-C", 361),
-                                  ("MESH/SR/PROX/BV-09-C-LT2", 17)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-09-C", 361),
+                                  SynchPoint("MESH/SR/PROX/BV-09-C-LT2", 17)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-10-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-10-C", 361),
-                                  ("MESH/SR/PROX/BV-10-C-LT2", 17)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-10-C", 361),
+                                  SynchPoint("MESH/SR/PROX/BV-10-C-LT2", 17)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-12-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-12-C", 364),
-                                  ("MESH/SR/PROX/BV-12-C-LT2", 366)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-12-C", 364),
+                                  SynchPoint("MESH/SR/PROX/BV-12-C-LT2", 366)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-13-C-LT2",
-                       cmds=pre_conditions_slave,
+                       cmds=pre_conditions_slave +
+                       [TestFunc(get_stack().synch.add_synch_element,
+                                 [SynchPoint("MESH/SR/PROX/BV-13-C-LT2", 94, delay=5),
+                                  SynchPoint("MESH/SR/PROX/BV-13-C", 17, delay=20)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BV-14-C-LT2",
                        cmds=pre_conditions_slave +
                        [TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-14-C", 355),
-                                  ("MESH/SR/PROX/BV-14-C-LT2", 356))),
+                                 [SynchPoint("MESH/SR/PROX/BV-14-C", 355),
+                                  SynchPoint("MESH/SR/PROX/BV-14-C-LT2", 356)]),
                         TestFunc(get_stack().synch.add_synch_element,
-                                 (("MESH/SR/PROX/BV-14-C", 357),
-                                  ("MESH/SR/PROX/BV-14-C-LT2", 358)))],
+                                 [SynchPoint("MESH/SR/PROX/BV-14-C", 357),
+                                  SynchPoint("MESH/SR/PROX/BV-14-C-LT2", 358)])],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/SR/PROX/BI-01-C-LT2",
                        cmds=pre_conditions_slave,
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/CFG/HBP/BV-05-C-LT2",
+                  cmds=pre_conditions_slave +
+                       [TestFunc(lambda: pts2.update_pixit_param(
+                           "MESH", "TSPX_device_uuid", device_uuid)),
+                        TestFunc(lambda: pts2.update_pixit_param(
+                           "MESH", "TSPX_device_uuid2", device_uuid2))],
+                  generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/CFG/HBS/BV-05-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-02-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-03-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-04-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-05-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-06-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-08-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-09-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-10-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-11-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-12-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-14-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-15-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-16-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-17-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-18-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-19-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-20-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
+                       generic_wid_hdl=mesh_wid_hdl),
+        ZTestCaseSlave("MESH", "MESH/NODE/FRND/FN/BV-21-C-LT2",
+                       cmds=pre_conditions_slave +
+                            [TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid", device_uuid)),
+                             TestFunc(lambda: pts2.update_pixit_param(
+                                 "MESH", "TSPX_device_uuid2", device_uuid2))],
                        generic_wid_hdl=mesh_wid_hdl),
         ZTestCaseSlave("MESH", "MESH/NODE/FRND/TWO_NODES_PROVISIONER",
                        cmds=pre_conditions_slave +
@@ -1181,7 +1265,7 @@ def test_cases(ptses):
                        generic_wid_hdl=mesh_wid_hdl),
     ]
 
-    return test_cases
+    return test_cases + test_cases_lt2 + test_cases_slaves
 
 
 def main():

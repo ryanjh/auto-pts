@@ -208,8 +208,8 @@ def hdl_wid_50(desc):
 def hdl_wid_51(desc):
     stack = get_stack()
 
+    btp.gap_set_nonconn()
     btp.gap_set_gendiscov()
-
     btp.gap_adv_ind_on(ad=stack.gap.ad)
 
     return True
@@ -226,9 +226,14 @@ def hdl_wid_53(desc):
 
 
 def hdl_wid_54(desc):
-    hdl_wid_51(desc)
-    return True
+    stack = get_stack()
 
+    btp.gap_set_nonconn()
+    btp.gap_set_gendiscov()
+
+    btp.gap_adv_ind_on(ad=stack.gap.ad)
+
+    return True
 
 def hdl_wid_55(desc):
     stack = get_stack()
@@ -331,10 +336,11 @@ def hdl_wid_80(desc):
 def hdl_wid_82(desc):
     return True
 
-
 def hdl_wid_83(desc):
     return True
 
+def hdl_wid_84(desc):
+    return True
 
 def hdl_wid_85(desc):
     return True
@@ -382,21 +388,17 @@ def hdl_wid_108(desc):
 
 
 def hdl_wid_112(desc):
-    stack = get_stack()
-
     bd_addr = btp.pts_addr_get()
     bd_addr_type = btp.pts_addr_type_get()
 
-    btp.gattc_disc_all_chrc(bd_addr_type, bd_addr, 0x0001, 0xffff)
-    attrs = btp.gattc_disc_all_chrc_rsp()
+    handle = btp.parse_handle_description(desc)
+    if not handle:
+        return False
 
-    for attr in attrs:
-        if attr.prop & Prop.read:
-            btp.gattc_read(bd_addr_type, bd_addr, attr.value_handle)
-            btp.gattc_read_rsp()
-            return True
-
-    return False
+    btp.gattc_read(bd_addr_type, bd_addr, handle)
+    # PTS doesn't respond to read req if we do not respond to this WID
+    # btp.gattc_read_rsp()
+    return True
 
 
 def hdl_wid_114(desc):
@@ -557,7 +559,8 @@ def hdl_wid_144(desc):
 
 
 def hdl_wid_148(desc):
-    return btp.verify_not_connected(desc)
+    btp.gap_conn()
+    return not btp.gap_wait_for_connection(10)
 
 
 def hdl_wid_149(desc):
@@ -723,9 +726,7 @@ def hdl_wid_204(desc):
 
 def hdl_wid_1002(desc):
     stack = get_stack()
-    passkey = stack.gap.passkey.data
-    stack.gap.passkey.data = None
-    return passkey
+    return stack.gap.get_passkey()
 
 
 def hdl_wid_2142(desc):
