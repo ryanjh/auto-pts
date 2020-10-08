@@ -1,3 +1,2 @@
 wmi
 pywin32
-utils

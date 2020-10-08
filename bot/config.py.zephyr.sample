@@ -84,7 +84,7 @@ z['gdrive'] = {
 # ****************************************************************************
 
 z['iut_config'] = {
-    "prj.conf": {},  # Default config file name
+    "default.conf": {},  # Default config file name
 
     "privacy.conf": {
         "overlay": {'CONFIG_BT_PRIVACY': 'y'},

@@ -73,7 +73,7 @@ init_gatt_db = [TestFunc(btp.core_reg_svc_gatt),
 
 iut_device_name = 'Tester'
 iut_manufacturer_data = 'ABCD'
-iut_ad_uri = '000168747470733A2F2F7777772E626C7565746F'
+iut_ad_uri = '162F'
 iut_appearance = '1111'
 iut_svc_data = '1111'
 iut_flags = '11'
@@ -174,7 +174,7 @@ def set_pixits(pts):
     pts.set_pixit("GAP",
                   "TSPX_iut_device_name_in_adv_packet_for_random_address", iut_device_name)
     pts.set_pixit("GAP", "TSPX_Tgap_104", "60000")
-    pts.set_pixit("GAP", "TSPX_URI", "000168747470733A2F2F7777772E626C7565746F")
+    pts.set_pixit("GAP", "TSPX_URI", "162F2F7777772E626C7565746F6F74682E636F6D")
 
 
 def test_cases(pts):
@@ -496,19 +496,10 @@ def test_cases(pts):
         ZTestCase("GAP", "GAP/ADV/BV-05-C",
                   pre_conditions,
                   generic_wid_hdl=gap_wid_hdl),
-        ZTestCase("GAP", "GAP/ADV/BV-08-C",
-                  pre_conditions,
-                  generic_wid_hdl=gap_wid_hdl),
         ZTestCase("GAP", "GAP/ADV/BV-10-C",
                   cmds=pre_conditions,
                   generic_wid_hdl=gap_wid_hdl),
         ZTestCase("GAP", "GAP/ADV/BV-11-C",
-                  cmds=pre_conditions,
-                  generic_wid_hdl=gap_wid_hdl),
-        ZTestCase("GAP", "GAP/ADV/BV-12-C",
-                  cmds=pre_conditions,
-                  generic_wid_hdl=gap_wid_hdl),
-        ZTestCase("GAP", "GAP/ADV/BV-14-C",
                   cmds=pre_conditions,
                   generic_wid_hdl=gap_wid_hdl),
         ZTestCase("GAP", "GAP/ADV/BV-17-C",
@@ -528,12 +519,6 @@ def test_cases(pts):
                   cmds=pre_conditions,
                   generic_wid_hdl=gap_wid_hdl),
         ZTestCase("GAP", "GAP/GAT/BV-04-C",
-                  cmds=pre_conditions,
-                  generic_wid_hdl=gap_wid_hdl),
-        ZTestCase("GAP", "GAP/GAT/BV-05-C",
-                  cmds=pre_conditions,
-                  generic_wid_hdl=gap_wid_hdl),
-        ZTestCase("GAP", "GAP/GAT/BV-06-C",
                   cmds=pre_conditions,
                   generic_wid_hdl=gap_wid_hdl),
     ]

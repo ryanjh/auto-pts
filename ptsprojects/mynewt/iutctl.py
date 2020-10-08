@@ -21,28 +21,41 @@ import serial
 
 from pybtp import defs
 from pybtp.types import BTPError
-from pybtp.iutctl_common import BTPWorker, BTP_ADDRESS
+from pybtp.iutctl_common import BTPWorker
 
 log = logging.debug
 MYNEWT = None
+
+# qemu binary should be installed in shell PATH
+QEMU_BIN = "qemu-system-arm"
+
+# BTP communication transport: unix domain socket file name
+BTP_ADDRESS = "/tmp/bt-stack-tester"
+
+# qemu log file object
 IUT_LOG_FO = None
+
 SERIAL_BAUDRATE = 115200
 
 
 class MynewtCtl:
     '''Mynewt OS Control Class'''
 
-    def __init__(self, tty_file, board_name):
+    def __init__(self, kernel_image, tty_file, board_name=None):
         """Constructor."""
-        log("%s.%s tty_file=%s board_name=%s",
-            self.__class__, self.__init__.__name__, tty_file,
+        log("%s.%s kernel_image=%s tty_file=%s board_name=%s",
+            self.__class__, self.__init__.__name__, kernel_image, tty_file,
             board_name)
 
-        assert tty_file and board_name
-
+        self.kernel_image = kernel_image
         self.tty_file = tty_file
-        self.board = Board(board_name, tty_file)
 
+        if self.tty_file and board_name:  # DUT is a hardware board, not QEMU
+            self.board = Board(board_name, kernel_image, tty_file)
+        else:  # DUT is QEMU or a board that won't be reset
+            self.board = None
+
+        self.qemu_process = None
         self.socat_process = None
         self.btp_socket = None
 
@@ -84,6 +97,10 @@ class MynewtCtl:
         self.stop()
         self.start()
         self.flush_serial()
+
+        if not self.board:
+            return
+
         self.board.reset()
 
     def wait_iut_ready_event(self):
@@ -139,17 +156,22 @@ class Board:
         'nordic_pca10056'
     ]
 
-    def __init__(self, board_name, tty_file):
+    def __init__(self, board_name, kernel_image, tty_file):
         """Constructor of board"""
         if board_name not in self.names:
             raise Exception("Board name %s is not supported!" % board_name)
 
         self.name = board_name
+        self.kernel_image = kernel_image
         self.tty_file = tty_file
         self.reset_cmd = self.get_reset_cmd()
 
     def reset(self):
-        """Reset HW DUT board with
+        """Reset HW DUT board with openocd
+
+        With introduction of persistent storage in DUT flashing kernel image in
+        addition to reset will become necessary
+
         """
         log("About to reset DUT: %r", self.reset_cmd)
 
@@ -160,6 +182,22 @@ class Board:
 
         if reset_process.wait():
             logging.error("reset failed")
+
+        # success = False
+        # retry_max = 1
+        # retry_count = 0
+        #
+        # while (not success) and (retry_count < retry_max):
+        #     reset_process = subprocess.Popen(shlex.split(self.reset_cmd),
+        #                                      shell=False,
+        #                                      stdout=IUT_LOG_FO,
+        #                                      stderr=IUT_LOG_FO)
+        #     if reset_process.wait() != 0:
+        #         logging.error("reset failed")
+        #         retry_count += 1
+        #         time.sleep(5)
+        #     else:
+        #         success = True
 
     def get_reset_cmd(self):
         """Return reset command for a board"""
@@ -177,19 +215,21 @@ def init_stub():
     MYNEWT = MynewtCtlStub()
 
 
-def init(tty_file, board):
+def init(kernel_image, tty_file, board=None):
     """IUT init routine
 
-    tty_file -- Path to TTY file. BTP communication with HW DUT will be done
-    over this TTY.
-    board -- HW DUT board to use for testing.
+    kernel_image -- Path to Mynewt kernel image
+    tty_file -- Path to TTY file, if specified QEMU will not be used and
+                BTP communication with HW DUT will be done over this TTY.
+    board -- HW DUT board to use for testing. This parameter is used only
+             if tty_file is specified
     """
     global IUT_LOG_FO
     global MYNEWT
 
     IUT_LOG_FO = open("iut-mynewt.log", "w")
 
-    MYNEWT = MynewtCtl(tty_file, board)
+    MYNEWT = MynewtCtl(kernel_image, tty_file, board)
 
 
 def cleanup():

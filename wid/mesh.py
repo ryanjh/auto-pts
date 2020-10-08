@@ -28,20 +28,30 @@ log = logging.debug
 
 
 def hdl_pending_mesh_wids(wid, test_case_name, description):
-    log("%s, %r, %r, %s", hdl_pending_mesh_wids.__name__, wid, description,
-        test_case_name)
     stack = get_stack()
     module = sys.modules[__name__]
 
-    actions = stack.synch.perform_synch(wid, test_case_name, description)
-    if not actions:
-        return "WAIT"
+    if stack.synch.is_required_synch(test_case_name, wid):
+        actions = stack.synch.perform_synch(wid, test_case_name, description)
 
-    for action in actions:
-        handler = getattr(module, "hdl_wid_%d" % action.wid)
-        result = handler(action.description)
-        stack.synch.prepare_pending_response(action.test_case,
-                                             result, action.delay)
+        if actions:
+            for action in actions:
+                action_wid = action[0]
+                action_description = action[1]
+                action_test_case_name = action[2]
+                action_response_cb = action[3]
+
+                handler = getattr(module, "hdl_wid_%d" % action_wid)
+                result = handler(action_description)
+
+                # Register pending response handler
+                stack.synch.prepare_pending_response(action_test_case_name,
+                                                     result)
+
+            return None
+
+        # wid is on synchronise list but has to wait for other
+        return "WAIT"
 
     return None
 
@@ -50,21 +60,23 @@ def mesh_wid_hdl(wid, description, test_case_name):
     log("%s, %r, %r, %s", mesh_wid_hdl.__name__, wid, description,
         test_case_name)
     module = sys.modules[__name__]
+    pending_responses = None
 
     try:
         handler = getattr(module, "hdl_wid_%d" % wid)
+        current_response = handler(description)
 
         stack = get_stack()
-        if not stack.synch or not stack.synch.is_required_synch(test_case_name, wid):
-            return handler(description)
+        if stack.synch:
+            response = hdl_pending_mesh_wids(wid, test_case_name, description)
 
-        response = hdl_pending_mesh_wids(wid, test_case_name, description)
+            if response == "WAIT":
+                return response
 
-        if response == "WAIT":
-            return response
+        if stack.synch:
+            stack.synch.set_pending_responses_if_any()
 
-        stack.synch.set_pending_responses_if_any()
-        return "WAIT"
+        return current_response
 
     except AttributeError as e:
         logging.exception(e.message)
@@ -256,15 +268,6 @@ def hdl_wid_21(desc):
     """
     stack = get_stack()
     return '8000'
-
-
-def hdl_wid_22(desc):
-    """
-    Implements:
-    :param desc: Please bind an AppKey to a Model Id = 2 for the testing.
-    :return:
-    """
-    return True
 
 
 def hdl_wid_23(desc):
@@ -881,6 +884,7 @@ def hdl_wid_221(desc):
 
     if not stack.mesh.is_iv_test_mode_enabled.data:
         btp.mesh_iv_update_test_mode(True)
+        btp.mesh_iv_update_toggle()
     return True
 
 
@@ -1033,6 +1037,7 @@ def hdl_wid_302(desc):
                  Lower Tester 2 sent.
     :return:
     """
+    sleep(5)
     return True
 
 
@@ -1177,6 +1182,7 @@ def hdl_wid_319(desc):
     :param desc: Click OK to send Mesh messages to IUT(Friend Node).
     :return:
     """
+    sleep(10)
     return True
 
 
@@ -1209,6 +1215,7 @@ def hdl_wid_327(desc):
                  Lower Tester 1 and IUT
     :return:
     """
+    time.sleep(5)
     return True
 
 
@@ -1226,26 +1233,6 @@ def hdl_wid_330(desc):
     """
     Implements:
     :param desc: Click OK to send Friend Clear Message.
-    :return:
-    """
-    return True
-
-
-def hdl_wid_332(desc):
-    """
-    Implements:
-    :param desc: Please send Heartbeat Publication Set message from Lower
-                 Tester 2 to IUT, and then send Friend Poll from IUT to Lower Tester 1.
-    :return:
-    """
-    return True
-
-
-def hdl_wid_333(desc):
-    """
-    Implements:
-    :param desc: Lower Tester 1 will now stop responding to Friend Poll from IUT.
-                 Please click OK when friendship is terminated.
     :return:
     """
     return True
@@ -1436,28 +1423,10 @@ def hdl_wid_367(desc):
     return True
 
 
-def hdl_wid_368(desc):
-    """
-    Implements:
-    :param desc: Please confirm that IUT received the mesh packet to LT1.
-    :return:
-    """
-    return True
-
-
 def hdl_wid_500(desc):
     """
     Implements:
     :param desc: Waiting for Composition Data Get Request.
-    :return:
-    """
-    return True
-
-
-def hdl_wid_518(desc):
-    """
-    Implements:
-    :param desc: Please send AppKey Add.
     :return:
     """
     return True
@@ -1517,54 +1486,6 @@ def hdl_wid_557(desc):
     """
     Implements:
     :param desc: Please send Heartbeat message to Low Power Node address
-    :return:
-    """
-    return True
-
-
-def hdl_wid_560(desc):
-    """
-    Implements:
-    :param desc: Lower Tester 2 is waiting for IUT's heartbeat triggered by friendship termination.
-    :return:
-    """
-    btp.mesh_lpn(False)
-    return True
-
-
-def hdl_wid_561(desc):
-    """
-    Implements:
-    :param desc: Lower Tester 2 is waiting for IUT's heartbeat triggered by friendship establishment.
-    :return:
-    """
-    return True
-
-
-def hdl_wid_562(desc):
-    """
-    Implements:
-    :param desc: Friendship will be terminated between Lower Tester 1 and IUT. Verifying no heartbeat is triggered by the termination...
-    :return:
-    """
-    return True
-
-
-def hdl_wid_564(desc):
-    """
-    Implements:
-    :param desc: Please wait until Friendship is reestablished between Lower Tester 1 and IUT. Click OK to send Heartbeat Subscription Set message to IUT (Low Power Node).
-    :return:
-    """
-    return True
-
-
-def hdl_wid_563(desc):
-    """
-    Implements:
-    :param desc: Please wait until Friendship is established between Lower Tester
-                 1 and IUT. Click OK to send Heartbeat Subscription Set message
-                 to IUT (Low Power Node).
     :return:
     """
     return True

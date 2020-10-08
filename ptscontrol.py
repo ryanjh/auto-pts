@@ -55,8 +55,6 @@ logtype_whitelist = [ptstypes.PTS_LOGTYPE_START_TEST,
                      ptstypes.PTS_LOGTYPE_ERROR,
                      ptstypes.PTS_LOGTYPE_FINAL_VERDICT]
 
-PTS_WORKSPACE_FILE_EXT = ".pqw6"
-
 
 class PTSLogger(win32com.server.connect.ConnectableServer):
     """PTS control client logger callback implementation"""
@@ -467,11 +465,12 @@ class PyPTS:
     def _get_own_workspaces():
         """Get auto-pts own workspaces"""
         script_path = os.path.split(os.path.realpath(__file__))[0]
+        required_ext = ".pqw6"  # valid PTS workspace file extension
         workspaces = {}
 
         for root, dirs, files in os.walk("workspaces"):
             for file in files:
-                if file.endswith(PTS_WORKSPACE_FILE_EXT):
+                if file.endswith(required_ext):
                     name = os.path.splitext(file)[0]
                     path = os.path.join(script_path, root, file)
                     workspaces[name] = path
@@ -482,6 +481,8 @@ class PyPTS:
         """Opens existing workspace"""
 
         log("%s %s", self.open_workspace.__name__, workspace_path)
+
+        required_ext = ".pqw6"  # valid PTS workspace file extension
 
         # auto-pts own workspaces
         autopts_workspaces = self._get_own_workspaces()
@@ -496,10 +497,10 @@ class PyPTS:
                             (workspace_path,))
 
         specified_ext = os.path.splitext(workspace_path)[1]
-        if PTS_WORKSPACE_FILE_EXT != specified_ext:
+        if required_ext != specified_ext:
             raise Exception(
                 "Workspace file '%s' extension is wrong, should be %s" %
-                (workspace_path, PTS_WORKSPACE_FILE_EXT))
+                (workspace_path, required_ext))
 
         # Workaround CASE0044114 PTS issue
         # Do not open original workspace file that can become broken by
@@ -789,6 +790,7 @@ class PyPTS:
 
 def parse_args():
     """Parses command line arguments and options"""
+    required_ext = ".pqw6"  # valid PTS workspace file extension
 
     arg_parser = argparse.ArgumentParser(
         description="PTS Control")
@@ -796,7 +798,7 @@ def parse_args():
     arg_parser.add_argument(
         "workspace",
         help="Path to PTS workspace to use for testing. It should have %s "
-        "extension" % (PTS_WORKSPACE_FILE_EXT,))
+        "extension" % (required_ext,))
 
     args = arg_parser.parse_args()
 

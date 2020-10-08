@@ -43,7 +43,7 @@ def check_call(cmd, env=None, cwd=None, shell=True):
     """
     cmd = subprocess.list2cmdline(cmd)
 
-    return subprocess.check_call(cmd, env=env, cwd=cwd, shell=shell, executable='/bin/bash')
+    return subprocess.check_call(cmd, env=env, cwd=cwd, shell=shell)
 
 
 def _validate_pair(ob):
@@ -67,7 +67,7 @@ def source_zephyr_env(zephyr_wd):
     cmd = subprocess.list2cmdline(cmd)
 
     p = subprocess.Popen(cmd, cwd=zephyr_wd, shell=True,
-                         stdout=subprocess.PIPE, executable='/bin/bash')
+                         stdout=subprocess.PIPE)
 
     lines = p.stdout.readlines()
     # XXX: Doesn't parse functions for now
@@ -82,6 +82,31 @@ def source_zephyr_env(zephyr_wd):
     return env
 
 
+def flash_nrf52(tester_outdir):
+    """ Flash Zephyr binary for nrf52 board
+    :param cwd: Zephyr build directory
+    :return: TTY path
+    """
+    check_call(['nrfjprog', '--eraseall', '-f', 'nrf52'])
+    check_call(['nrfjprog', '--program', 'zephyr/zephyr.hex', '-f', 'nrf52'],
+               cwd=tester_outdir)
+    check_call(['nrfjprog', '-p'])
+
+    return get_tty_path("J-Link")
+
+
+
+def flash_reel(tester_outdir):
+    """ Flash Zephyr binary for reel board
+    :param cwd: Zephyr build directory
+    :return: TTY path
+    """
+    check_call(['pyocd', 'flash', '-t', 'nrf52', 'zephyr/zephyr.hex'],
+               cwd=tester_outdir)
+
+    return get_tty_path("DAPLink")
+
+
 def build_and_flash(zephyr_wd, board, conf_file=None):
     """Build and flash Zephyr binary
     :param zephyr_wd: Zephyr source path
@@ -91,20 +116,34 @@ def build_and_flash(zephyr_wd, board, conf_file=None):
     """
     logging.debug("{}: {} {} {}". format(build_and_flash.__name__, zephyr_wd,
                                          board, conf_file))
-    tester_dir = os.path.join(zephyr_wd, "tests", "bluetooth", "tester")
+    tester_outdir = os.path.join(zephyr_wd, "tests", "bluetooth", "tester",
+                                 "outdir")
+
+    if os.path.isdir(tester_outdir):
+        check_call(['rm', '-rf', tester_outdir], cwd=zephyr_wd)
+
+    os.makedirs(tester_outdir)
 
     # Set Zephyr project env variables
     env = source_zephyr_env(zephyr_wd)
 
-    cmd = ['west',  'build', '-p', 'auto', '-b', board]
+    cmd = ['cmake', '-GNinja', '-DBOARD={}'.format(board)]
     if conf_file:
-        cmd.extend(('--', '-DCONF_FILE={}'.format(conf_file)))
+        cmd.append('-DCONF_FILE={}'.format(conf_file))
+    cmd.append('..')
 
-    check_call(cmd, env=env, cwd=tester_dir)
-    check_call(['west', 'flash'], env=env, cwd=tester_dir)
+    check_call(cmd, env=env, cwd=tester_outdir)
+    check_call(['ninja'], env=env, cwd=tester_outdir)
 
-    return get_tty_path("J-Link")
+    if board == 'nrf52840_pca10056':
+        tty = flash_nrf52(tester_outdir)
+    elif board == 'reel_board':
+        tty = flash_reel(tester_outdir)
+    else:
+        # Unsupported board and stop here
+        tty = None
 
+    return tty
 
 def flush_serial(tty):
     """Clear the serial port buffer
@@ -229,7 +268,9 @@ def run_tests(args, iut_config):
     total_regressions = []
     _args = {}
 
-    config_default = "prj.conf"
+    callback_thread = autoptsclient.init_core()
+
+    config_default = "default.conf"
     _args[config_default] = PtsInitArgs(args)
 
     for config, value in iut_config.items():
@@ -239,15 +280,11 @@ def run_tests(args, iut_config):
             config_default = config
             continue
 
-        if config != config_default:
-            _args[config] = PtsInitArgs(args)
-
+        _args[config] = PtsInitArgs(args)
         _args[config].test_cases = value.get('test_cases', [])
+        _args[config_default].excluded += _args[config].test_cases
 
-        if 'overlay' in value:
-            _args[config_default].excluded += _args[config].test_cases
-
-    ptses = autoptsclient.init_pts(_args[config_default],
+    ptses = autoptsclient.init_pts(_args[config_default], callback_thread,
                                    "zephyr_" + str(args["board"]))
 
     btp.init(get_iut)
@@ -259,7 +296,8 @@ def run_tests(args, iut_config):
 
     stack.init_stack()
     stack_inst = stack.get_stack()
-    stack_inst.synch_init([pts.callback_thread for pts in ptses])
+    stack_inst.synch_init(callback_thread.set_pending_response,
+                          callback_thread.clear_pending_responses)
 
     for config, value in iut_config.items():
         if 'overlay' in value:

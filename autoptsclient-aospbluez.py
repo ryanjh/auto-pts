@@ -15,26 +15,18 @@
 # more details.
 #
 
-"""Bluez auto PTS client"""
+"""AOSP BlueZ auto PTS client"""
 
 import os
 import sys
-from distutils.spawn import find_executable
-
 import autoptsclient_common as autoptsclient
-import ptsprojects.bluez as autoprojects
-import ptsprojects.stack as stack
-from pybtp import btp
-from ptsprojects.bluez.iutctl import get_iut
+import ptsprojects.aospbluez as autoprojects
 
 
 def parse_args():
     """Parses command line arguments and options"""
 
     arg_parser = autoptsclient.CliParser(description="PTS automation client")
-
-    arg_parser.add_argument("btpclient_path",
-                            help="Path to Bluez tool btpclient")
 
     # IUT specific arguments below
 
@@ -50,38 +42,27 @@ def main():
 
     args = parse_args()
 
-    callback_thread = autoptsclient.init_core()
+    proxy = autoptsclient.init_core(args.server_address, args.workspace)
 
-    ptses = autoptsclient.init_pts(args, callback_thread)
+    test_cases = autoprojects.rfcomm.test_cases(proxy)
+    # test_cases = autoprojects.l2cap.test_cases(proxy)
+    # test_cases = autoprojects.gap.test_cases(proxy)
 
-    btp.init(get_iut)
-
-    autoprojects.iutctl.AUTO_PTS_LOCAL = autoptsclient.AUTO_PTS_LOCAL
-    autoprojects.iutctl.init(args.btpclient_path)
-
-    stack.init_stack()
-    stack_inst = stack.get_stack()
-    stack_inst.synch_init(callback_thread.set_pending_response,
-                          callback_thread.clear_pending_responses)
-
-    test_cases = autoprojects.gap.test_cases(ptses[0])
-    test_cases += autoprojects.sm.test_cases(ptses[0])
-
-    autoptsclient.run_test_cases(ptses, test_cases, args)
-
+    autoprojects.iutctl.init()
+    autoptsclient.run_test_cases(proxy, test_cases, args)
     autoprojects.iutctl.cleanup()
 
     print "\nBye!"
     sys.stdout.flush()
 
-    for pts in ptses:
-        pts.unregister_xmlrpc_ptscallback()
+    proxy.unregister_xmlrpc_ptscallback()
 
     # not the cleanest but the easiest way to exit the server thread
     os._exit(0)
 
 
 if __name__ == "__main__":
+
     # os._exit: not the cleanest but the easiest way to exit the server thread
     try:
         main()
@@ -93,7 +74,7 @@ if __name__ == "__main__":
     except SystemExit:
         raise  # let the default handlers do the work
 
-    except Exception:
+    except BaseException:
         import traceback
         traceback.print_exc()
         os._exit(16)
