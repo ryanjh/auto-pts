@@ -106,6 +106,7 @@ def set_pixits(pts):
     pts.set_pixit("SM", "TSPX_delete_ltk", "FALSE")
     pts.set_pixit("SM", "TSPX_mtu_size", "23")
     pts.set_pixit("SM", "TSPX_new_key_failed_count", "0")
+    pts.set_pixit("SM", "TSPX_iut_device_name_in_adv_packet_for_random_address", "Tester")
 
 
 def test_cases(pts):
@@ -115,17 +116,13 @@ def test_cases(pts):
     pts_bd_addr = pts.q_bd_addr
 
     stack = get_stack()
-    iut_device_name = 'Tester'
+    stack.gap_init(name='Tester')
 
     pre_conditions = [TestFunc(btp.core_reg_svc_gap),
-                      TestFunc(stack.gap_init, iut_device_name),
                       TestFunc(btp.gap_read_ctrl_info),
                       TestFunc(lambda: pts.update_pixit_param(
                           "SM", "TSPX_bd_addr_iut",
                           stack.gap.iut_addr_get_str())),
-                      TestFunc(lambda: pts.update_pixit_param(
-                          "SM", "TSPX_iut_device_name_in_adv_packet_for_random_address",
-                          iut_device_name)),
                       TestFunc(lambda: pts.update_pixit_param(
                           "SM", "TSPX_peer_addr_type",
                           "01" if stack.gap.iut_addr_is_random() else "00")),
@@ -241,6 +238,12 @@ def test_cases(pts):
                   pre_conditions +
                   [TestFunc(btp.gap_set_io_cap, IOCap.display_only)],
                   generic_wid_hdl=sm_wid_hdl),
+        ZTestCase("SM", "SM/MAS/OOB/BV-01-C",
+                  # Set CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY=y in prj.conf
+                  pre_conditions +
+                  [TestFunc(btp.gap_set_io_cap, IOCap.display_only),
+                   TestFunc(btp.gap_oob_legacy_set_data, stack.gap.oob_legacy)],
+                  generic_wid_hdl=sm_wid_hdl),
         ZTestCase("SM", "SM/MAS/OOB/BV-05-C",
                   pre_conditions +
                   [TestFunc(btp.gap_set_io_cap, IOCap.display_only)],
@@ -330,7 +333,6 @@ def test_cases(pts):
                   pre_conditions +
                   [TestFunc(btp.gap_set_io_cap, IOCap.keyboard_display)],
                   generic_wid_hdl=sm_wid_hdl),
-
         ZTestCase("SM", "SM/SLA/SIE/BV-01-C",
                   pre_conditions +
                   [TestFunc(btp.gap_set_io_cap, IOCap.no_input_output),],
