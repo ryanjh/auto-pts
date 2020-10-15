@@ -243,6 +243,11 @@ def test_cases(pts):
                   [TestFunc(btp.gap_set_io_cap, IOCap.display_only),
                    TestFunc(btp.gap_oob_legacy_set_data, stack.gap.oob_legacy)],
                   generic_wid_hdl=sm_wid_hdl),
+        ZTestCase("SM", "SM/MAS/OOB/BV-03-C",
+                  pre_conditions +
+                  [TestFunc(btp.gap_set_io_cap, IOCap.display_only),
+                   TestFunc(btp.gap_oob_legacy_set_data, stack.gap.oob_legacy)],
+                  generic_wid_hdl=sm_wid_hdl),
         ZTestCase("SM", "SM/MAS/OOB/BV-05-C",
                   pre_conditions +
                   [TestFunc(btp.gap_set_io_cap, IOCap.display_only)],
