@@ -39,8 +39,6 @@ def sm_wid_hdl(wid, description, test_case_name):
 # wid handlers section begin
 def hdl_wid_100(desc):
     btp.gap_conn()
-    btp.gap_wait_for_connection()
-    btp.gap_pair()
     return True
 
 
