@@ -106,7 +106,6 @@ def set_pixits(pts):
     pts.set_pixit("SM", "TSPX_delete_ltk", "FALSE")
     pts.set_pixit("SM", "TSPX_mtu_size", "23")
     pts.set_pixit("SM", "TSPX_new_key_failed_count", "0")
-    pts.set_pixit("SM", "TSPX_iut_device_name_in_adv_packet_for_random_address", "Tester")
 
 
 def test_cases(pts):
@@ -114,15 +113,20 @@ def test_cases(pts):
     pts -- Instance of PyPTS"""
 
     pts_bd_addr = pts.q_bd_addr
+    iut_device_name = 'Tester'
 
     stack = get_stack()
-    stack.gap_init(name='Tester')
+    stack.gap_init(name=iut_device_name)
 
     pre_conditions = [TestFunc(btp.core_reg_svc_gap),
+                      TestFunc(stack.gap_init, iut_device_name),
                       TestFunc(btp.gap_read_ctrl_info),
                       TestFunc(lambda: pts.update_pixit_param(
                           "SM", "TSPX_bd_addr_iut",
                           stack.gap.iut_addr_get_str())),
+                      TestFunc(lambda: pts.update_pixit_param(
+                         "SM", "TSPX_iut_device_name_in_adv_packet_for_random_address",
+                         iut_device_name)),
                       TestFunc(lambda: pts.update_pixit_param(
                           "SM", "TSPX_peer_addr_type",
                           "01" if stack.gap.iut_addr_is_random() else "00")),
@@ -261,7 +265,17 @@ def test_cases(pts):
                   [TestFunc(btp.gap_set_io_cap, IOCap.display_only),
                    TestFunc(btp.gap_oob_legacy_set_data, stack.gap.oob_legacy)],
                   generic_wid_hdl=sm_wid_hdl),
+        ZTestCase("SM", "SM/MAS/OOB/BI-01-C",
+                  pre_conditions +
+                  [TestFunc(btp.gap_set_io_cap, IOCap.display_only),
+                   TestFunc(btp.gap_oob_legacy_set_data, stack.gap.oob_legacy)],
+                  generic_wid_hdl=sm_wid_hdl),
         ZTestCase("SM", "SM/SLA/OOB/BV-02-C",
+                  pre_conditions +
+                  [TestFunc(btp.gap_set_io_cap, IOCap.display_only),
+                   TestFunc(btp.gap_oob_legacy_set_data, stack.gap.oob_legacy)],
+                  generic_wid_hdl=sm_wid_hdl),
+        ZTestCase("SM", "SM/SLA/OOB/BV-04-C",
                   pre_conditions +
                   [TestFunc(btp.gap_set_io_cap, IOCap.display_only),
                    TestFunc(btp.gap_oob_legacy_set_data, stack.gap.oob_legacy)],
@@ -275,6 +289,11 @@ def test_cases(pts):
                   [TestFunc(btp.gap_set_io_cap, IOCap.display_only)],
                   generic_wid_hdl=sm_wid_hdl),
         ZTestCase("SM", "SM/SLA/OOB/BV-10-C",
+                  pre_conditions +
+                  [TestFunc(btp.gap_set_io_cap, IOCap.display_only),
+                   TestFunc(btp.gap_oob_legacy_set_data, stack.gap.oob_legacy)],
+                  generic_wid_hdl=sm_wid_hdl),
+        ZTestCase("SM", "SM/SLA/OOB/BI-02-C",
                   pre_conditions +
                   [TestFunc(btp.gap_set_io_cap, IOCap.display_only),
                    TestFunc(btp.gap_oob_legacy_set_data, stack.gap.oob_legacy)],

@@ -91,6 +91,9 @@ z['iut_config'] = {
         "overlay": {'CONFIG_BT_SMP_ENFORCE_MITM': 'y'},
         "test_cases": ['SM/SLA/PKE/BV-05-C',
                        'SM/SLA/SCPK/BI-04-C',
+                       'SM/MAS/OOB/BI-01-C',
+                       'SM/SLA/OOB/BV-04-C',
+                       'SM/SLA/OOB/BI-02-C',
                        'GAP/SEC/AUT/BV-12-C',
                        'GAP/SEC/AUT/BV-13-C'
                        ]
