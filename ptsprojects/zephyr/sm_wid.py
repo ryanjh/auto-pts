@@ -16,6 +16,7 @@
 import logging
 import sys
 import re
+import time
 
 from ptsprojects.stack import get_stack
 from pybtp import btp
@@ -39,7 +40,7 @@ def sm_wid_hdl(wid, description, test_case_name):
 # wid handlers section begin
 def hdl_wid_100(desc):
     btp.gap_conn()
-    return True
+    return get_stack().gap.wait_for_connection(30)
 
 
 def hdl_wid_101(desc):
@@ -49,7 +50,7 @@ def hdl_wid_101(desc):
 
 def hdl_wid_102(desc):
     btp.gap_disconn()
-    return True
+    return get_stack().gap.wait_for_disconnection(30)
 
 
 def hdl_wid_104(desc):
