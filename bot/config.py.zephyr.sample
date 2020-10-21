@@ -86,8 +86,7 @@ z['gdrive'] = {
 z['iut_config'] = {
     "prj.conf": {},  # Default config file name
 
-    "privacy.conf": {
-        "enforce_mitm.conf": {
+    "enforce_mitm.conf": {
         "overlay": {'CONFIG_BT_SMP_ENFORCE_MITM': 'y'},
         "test_cases": ['SM/SLA/PKE/BV-05-C',
                        'SM/SLA/SCPK/BI-04-C',
@@ -98,6 +97,7 @@ z['iut_config'] = {
                        'GAP/SEC/AUT/BV-13-C'
                        ]
     },
+
     "privacy.conf": {
         "overlay": {'CONFIG_BT_PRIVACY': 'y'},
         "test_cases": ['GAP/PRIV/CONN/BV-10-C',
@@ -119,17 +119,20 @@ z['iut_config'] = {
 
     "mesh_subnet_count.conf": {
         "overlay": {'CONFIG_BT_MESH_SUBNET_COUNT': '1'},
-        "test_cases": ['MESH/NODE/CFG/NKL/BI-03-C']},
+        "test_cases": ['MESH/NODE/CFG/NKL/BI-03-C']
+    },
 
     "l2cap_param_update.conf": {
         "overlay": {'CONFIG_BT_CTLR_CONN_PARAM_REQ': 'n'},
         "test_cases": ['GAP/CONN/CPUP/BV-01-C', 'GAP/CONN/CPUP/BV-02-C',
-                       'GAP/CONN/CPUP/BV-03-C', 'L2CAP/LE/CPU/BV-01-C']},
+                       'GAP/CONN/CPUP/BV-03-C', 'L2CAP/LE/CPU/BV-01-C']
+    },
 
     "gap_writable_device_name.conf": {
         "overlay": {'CONFIG_BT_DEVICE_NAME_DYNAMIC': 'y',
                     'CONFIG_BT_DEVICE_NAME_GATT_WRITABLE': 'y'},
-        'test_cases': ['GAP/GAT/BV-05-C']},
+        'test_cases': ['GAP/GAT/BV-05-C']
+    },
 }
 
 # ****************************************************************************
