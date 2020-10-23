@@ -302,13 +302,13 @@
           <Row>
             <Name>TSPC_GAP_8_3</Name>
             <Description>Non-Connectable and Non-Scannable Directed Event (C.1)</Description>
-            <Value>FALSE</Value>
+            <Value>TRUE</Value>
             <Mandatory>FALSE</Mandatory>
           </Row>
           <Row>
             <Name>TSPC_GAP_8_4</Name>
             <Description>Scannable Directed Event (C.1)</Description>
-            <Value>FALSE</Value>
+            <Value>TRUE</Value>
             <Mandatory>FALSE</Mandatory>
           </Row>
           <Row>
@@ -656,19 +656,19 @@
           <Row>
             <Name>TSPC_GAP_20_5</Name>
             <Description>Connectable Undirected Event (C.3)</Description>
-            <Value>FALSE</Value>
+            <Value>TRUE</Value>
             <Mandatory>FALSE</Mandatory>
           </Row>
           <Row>
             <Name>TSPC_GAP_20_6</Name>
             <Description>Non-Connectable and Non-Scannable Directed Event (C.3)</Description>
-            <Value>FALSE</Value>
+            <Value>TRUE</Value>
             <Mandatory>FALSE</Mandatory>
           </Row>
           <Row>
             <Name>TSPC_GAP_20_7</Name>
             <Description>Scannable Directed Event (C.3)</Description>
-            <Value>FALSE</Value>
+            <Value>TRUE</Value>
             <Mandatory>FALSE</Mandatory>
           </Row>
           <Row>
