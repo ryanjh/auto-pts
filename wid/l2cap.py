@@ -413,6 +413,9 @@ def hdl_wid_112(desc):
 
     return True
 
+def hdl_wid_254(desc):
+    # TODO: Fix to actually verify result of 'Insufficient Encryption Key Size' 0x0007 error
+    return get_stack().l2cap.wait_for_disconnection(0, 30)
 
 def hdl_wid_255(desc):
     stack = get_stack()
