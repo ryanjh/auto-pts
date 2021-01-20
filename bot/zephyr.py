@@ -23,6 +23,7 @@ import sys
 import time
 import datetime
 import collections
+from pathlib import Path
 
 import autoptsclient_common as autoptsclient
 import ptsprojects.zephyr as autoprojects
@@ -111,7 +112,7 @@ def build_and_flash(zephyr_wd, board, board_id, conf_file=None):
     cmd_flash = ['west', 'flash', '--snr', board_id]
     check_call(cmd_flash, env=env, cwd=tester_dir)
 
-    return get_tty_path("J-Link")
+    return get_tty_path(board, board_id)
 
 
 def flush_serial(tty):
@@ -161,31 +162,26 @@ def apply_overlay(zephyr_wd, base_conf, cfg_name, overlay):
     os.chdir(cwd)
 
 
-def get_tty_path(name):
-    """Returns tty path (eg. /dev/ttyUSB0) of serial device with specified name
-    :param name: device name
+def get_tty_path(board, board_id):
+    """Returns by-id symlink of the target device (eg. /dev/serial/by-id/usb-SEGGER_J-Link_000683477293-if00)
+    :param board: IUT
+    :param board_id: Segger ID
     :return: tty path if device found, otherwise None
     """
-    serial_devices = {}
-    ls = subprocess.Popen(["ls", "-l", "/dev/serial/by-id"],
-                          stdout=subprocess.PIPE)
+    defined_index_for_device = {
+        "nrf52dk_nrf52832": '00',
+        "nrf52833dk_nrf52833": '00',
+        "nrf52840dk_nrf52840": '00',
+        'nrf52833dk_nrf52820': '02',
+        "nrf5340dk_nrf5340_cpuapp": '04'
+    }
+    index = defined_index_for_device[board]
 
-    awk = subprocess.Popen("awk '{if (NF > 5) print $(NF-2), $NF}'",
-                           stdin=ls.stdout,
-                           stdout=subprocess.PIPE,
-                           shell=True)
-
-    end_of_pipe = awk.stdout
-    for line in end_of_pipe:
-        device, serial = line.decode().rstrip().split(" ")
-        serial_devices[device] = serial
-
-    for device, serial in list(serial_devices.items()):
-        if name in device:
-            tty = os.path.basename(serial)
-            return "/dev/{}".format(tty)
-
-    return None
+    dev = next(Path("/dev/serial/by-id").glob(f'*{board_id}*if{index}'), None)
+    if dev is not None:
+        dev = str(dev)
+    logging.debug('get_tty_path %s %s %s', board_id, index, dev)
+    return dev
 
 
 def get_test_cases(ptses):
