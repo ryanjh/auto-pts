@@ -314,7 +314,7 @@ class Board:
         Dependency: nRF5x command line tools
 
         """
-        return 'nrfjprog -f nrf52 -s {} -r'.format(BotProjects[0]['auto_pts']['board_id'])
+        return 'nrfjprog -s {} -r'.format(BotProjects[0]['auto_pts']['board_id'])
 
     def _get_reset_cmd_reel(self):
         """Return reset command for Reel_Board DUT
@@ -345,7 +345,8 @@ def init(kernel_image, tty_file, board=None, use_rtt2pty=False):
     """
     global ZEPHYR
 
-    ZEPHYR = ZephyrCtl(kernel_image, tty_file, board, use_rtt2pty)
+    board_family = board[:5] if ('nrf52' in board or 'nrf53' in board) else board
+    ZEPHYR = ZephyrCtl(kernel_image, tty_file, board_family, use_rtt2pty)
 
 
 def cleanup():
