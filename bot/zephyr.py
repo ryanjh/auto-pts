@@ -88,11 +88,12 @@ def source_zephyr_env(zephyr_wd):
     return env
 
 
-def build_and_flash(zephyr_wd, board, board_id, conf_file=None):
+def build_and_flash(zephyr_wd, board, board_id, conf_def, conf_file=None):
     """Build and flash Zephyr binary
     :param zephyr_wd: Zephyr source path
     :param board: IUT
     :param board_id: Serial number of IUT
+    :param conf_def: default configuration file
     :param conf_file: configuration file to be used
     :return: TTY path
     """
@@ -105,8 +106,8 @@ def build_and_flash(zephyr_wd, board, board_id, conf_file=None):
     env = source_zephyr_env(zephyr_wd)
 
     cmd_build = ['west', 'build', '-p', 'always', '-b', board]
-    if conf_file:
-        cmd_build.extend(('--', '-DCONF_FILE={}'.format(conf_file)))
+    if conf_file != conf_def:
+        cmd_build.extend(('--', '-DOVERLAY_CONFIG={}'.format(conf_file)))
 
     check_call(cmd_build, env=env, cwd=tester_dir)
 
@@ -132,11 +133,10 @@ def flush_serial(tty):
                 'continue;', 'done'])
 
 
-def apply_overlay(zephyr_wd, base_conf, cfg_name, overlay):
+def apply_overlay(zephyr_wd, cfg_name, overlay):
     """Duplicates default_conf configuration file and applies overlay changes
     to it.
     :param zephyr_wd: Zephyr source path
-    :param base_conf: base configuration file
     :param cfg_name: new configuration file name
     :param overlay: defines changes to be applied
     :return: None
@@ -146,23 +146,9 @@ def apply_overlay(zephyr_wd, base_conf, cfg_name, overlay):
 
     os.chdir(tester_app_dir)
 
-    with open(base_conf, 'r') as base:
-        with open(cfg_name, 'w') as config:
-            for line in base.readlines():
-                re_config = re.compile(
-                    r'(?P<config_key>\w+)=(?P<config_value>\w+)*')
-                match = re_config.match(line)
-                if match and match.group('config_key') in overlay:
-                    v = overlay.pop(match.group('config_key'))
-                    config.write(
-                        "{}={}\n".format(
-                            match.group('config_key'), v))
-                else:
-                    config.write(line)
-
-            # apply what's left
-            for k, v in list(overlay.items()):
-                config.write("{}={}\n".format(k, v))
+    with open(cfg_name, 'w') as config:
+        for k, v in list(overlay.items()):
+            config.write("{}={}\n".format(k, v))
 
     os.chdir(cwd)
 
@@ -292,12 +278,12 @@ def run_tests(args, iut_config):
 
     for config, value in list(iut_config.items()):
         if 'overlay' in value:
-            apply_overlay(args["project_path"], config_default, config,
-                          value['overlay'])
+            apply_overlay(args["project_path"], config, value['overlay'])
 
         tty = build_and_flash(args["project_path"],
                               args["board"],
                               args["board_id"],
+                              config_default,
                               config)
         logging.debug("TTY path: %s" % tty)
 
