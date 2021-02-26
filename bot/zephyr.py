@@ -124,7 +124,7 @@ def build_and_flash(zephyr_wd, board, board_id, conf_def, conf_file=None):
 
         cmd_build = ['west', 'build', '-p', 'always', '-b', board]
         check_call(cmd_build, env=env, cwd=tester_dir)
-        cmd_flash = ['west', 'flash', '--erase', '--snr', board_id]
+        cmd_flash = ['west', 'flash', '--recover', '--erase', '--snr', board_id]
         check_call(cmd_flash, env=env, cwd=tester_dir)
 
         repo.index.checkout(paths=nrf5340_overlay_conf, force=True)
@@ -136,7 +136,7 @@ def build_and_flash(zephyr_wd, board, board_id, conf_def, conf_file=None):
 
     check_call(cmd_build, env=env, cwd=tester_dir)
 
-    cmd_flash = ['west', 'flash', '--erase']
+    cmd_flash = ['west', 'flash', '--recover', '--erase']
     if board_id != '':
         cmd_flash.extend(('--snr', board_id))
         check_call(cmd_flash, env=env, cwd=tester_dir)
