@@ -78,6 +78,9 @@ def parse_args():
                             "will not be reset. Supported boards: %s. " %
                             (", ".join(board_names,),), choices=board_names)
 
+    arg_parser.add_argument("--board_id",
+                            help="Segger ID of the IUT used.", default='')
+
     arg_parser.add_argument("--rtt2pty",
                             help="Use RTT2PTY to capture logs from device."
                             "Requires rtt2pty tool and rtt support on IUT.",
@@ -109,7 +112,7 @@ def main():
     ptses = autoptsclient.init_pts(args, tc_db_table_name)
 
     btp.init(get_iut)
-    autoprojects.iutctl.init(args.kernel_image, args.tty_file, args.board, args.rtt2pty)
+    autoprojects.iutctl.init(args.kernel_image, args.tty_file, args.board_id, args.board, args.rtt2pty)
 
     stack.init_stack()
     stack_inst = stack.get_stack()
