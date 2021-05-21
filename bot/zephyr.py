@@ -315,7 +315,7 @@ def run_tests(args, iut_config):
         flush_serial(tty)
         time.sleep(10)
 
-        autoprojects.iutctl.init(args["kernel_image"], tty, args["board_id"], args["board"])
+        autoprojects.iutctl.init(args["kernel_image"], tty, args["board_id"], args["board"], args.get("rtt2pty"))
 
         # Setup project PIXITS
         autoprojects.gap.set_pixits(ptses[0])
